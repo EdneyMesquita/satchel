@@ -1,6 +1,13 @@
 import type { KeyValue } from "../types";
+import { VariableInput } from "./VariableField";
 
-export function KvEditor({ rows, onChange }: { rows: KeyValue[]; onChange: (rows: KeyValue[]) => void }) {
+interface KvEditorProps {
+  rows: KeyValue[];
+  onChange: (rows: KeyValue[]) => void;
+  variables?: KeyValue[];
+}
+
+export function KvEditor({ rows, onChange, variables = [] }: KvEditorProps) {
   const update = (index: number, patch: Partial<KeyValue>) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
@@ -12,7 +19,13 @@ export function KvEditor({ rows, onChange }: { rows: KeyValue[]; onChange: (rows
         <div className="kv-row" key={i}>
           <input type="checkbox" checked={row.enabled} onChange={(e) => update(i, { enabled: e.target.checked })} />
           <input placeholder="Key" value={row.key} onChange={(e) => update(i, { key: e.target.value })} />
-          <input placeholder="Value" value={row.value} onChange={(e) => update(i, { value: e.target.value })} />
+          <VariableInput
+            className="kv-value"
+            placeholder="Value"
+            value={row.value}
+            variables={variables}
+            onChange={(value) => update(i, { value })}
+          />
           <button className="remove" onClick={() => remove(i)} aria-label="Remove">
             ×
           </button>

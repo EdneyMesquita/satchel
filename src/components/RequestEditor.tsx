@@ -5,6 +5,7 @@ import { resolveVariables } from "../collectionTree";
 import { isTauri } from "../platform";
 import { parseCurl } from "../curl";
 import { KvEditor } from "./KvEditor";
+import { VariableInput, VariableTextarea } from "./VariableField";
 
 interface RequestEditorProps {
   request: SatchelRequest;
@@ -96,7 +97,7 @@ function authOfType(type: AuthConfig["type"]): AuthConfig {
   }
 }
 
-function BodyEditor({ body, onChange }: { body: RequestBody; onChange: (body: RequestBody) => void }) {
+function BodyEditor({ body, onChange, variables }: { body: RequestBody; onChange: (body: RequestBody) => void; variables: KeyValue[] }) {
   const [beautifyError, setBeautifyError] = useState(false);
 
   const beautify = () => {
@@ -138,17 +139,19 @@ function BodyEditor({ body, onChange }: { body: RequestBody; onChange: (body: Re
         {beautifyError && <span className="beautify-error">Invalid JSON — can't format it</span>}
       </div>
       {body.mode === "raw" && (
-        <textarea
+        <VariableTextarea
           className="raw-body"
           value={body.raw}
-          onChange={(e) => {
-            onChange({ ...body, raw: e.target.value });
+          variables={variables}
+          onChange={(raw) => {
+            onChange({ ...body, raw });
             setBeautifyError(false);
           }}
-          spellCheck={false}
         />
       )}
-      {body.mode === "urlencoded" && <KvEditor rows={body.params} onChange={(params) => onChange({ mode: "urlencoded", params })} />}
+      {body.mode === "urlencoded" && (
+        <KvEditor rows={body.params} variables={variables} onChange={(params) => onChange({ mode: "urlencoded", params })} />
+      )}
     </div>
   );
 }
@@ -217,10 +220,11 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
             </option>
           ))}
         </select>
-        <input
+        <VariableInput
           className="url-field"
           value={request.url}
-          onChange={(e) => patch({ url: e.target.value })}
+          variables={variables}
+          onChange={(url) => patch({ url })}
           onPaste={handleUrlPaste}
           placeholder="https://api.example.com/{{resource}} — or paste a curl command"
         />
@@ -244,9 +248,9 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
         </button>
       </div>
 
-      {tab === "params" && <KvEditor rows={request.params} onChange={(params) => patch({ params })} />}
-      {tab === "headers" && <KvEditor rows={request.headers} onChange={(headers) => patch({ headers })} />}
-      {tab === "body" && <BodyEditor body={request.body} onChange={(body) => patch({ body })} />}
+      {tab === "params" && <KvEditor rows={request.params} variables={variables} onChange={(params) => patch({ params })} />}
+      {tab === "headers" && <KvEditor rows={request.headers} variables={variables} onChange={(headers) => patch({ headers })} />}
+      {tab === "body" && <BodyEditor body={request.body} variables={variables} onChange={(body) => patch({ body })} />}
       {tab === "auth" && <AuthEditor auth={request.auth} onChange={(auth) => patch({ auth })} />}
 
       {(response || error) && (
