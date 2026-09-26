@@ -27,6 +27,10 @@ export function splitVariableTokens(text: string): TextRun[] {
   return runs;
 }
 
+export function findVariable(key: string, variables: KeyValue[]): KeyValue | undefined {
+  return variables.find((v) => v.key === key && v.enabled);
+}
+
 export function isVariableResolved(key: string, variables: KeyValue[]): boolean {
-  return variables.some((v) => v.key === key && v.enabled);
+  return findVariable(key, variables) !== undefined;
 }

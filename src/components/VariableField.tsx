@@ -1,17 +1,18 @@
 import { useRef } from "react";
 import type { KeyValue } from "../types";
-import { isVariableResolved, splitVariableTokens } from "../variableTokens";
+import { findVariable, splitVariableTokens } from "../variableTokens";
 
 function renderTokens(value: string, variables: KeyValue[]) {
-  return splitVariableTokens(value).map((run, i) =>
-    run.isVariable ? (
-      <span key={i} className={`var-token${isVariableResolved(run.key!, variables) ? "" : " unresolved"}`} title={isVariableResolved(run.key!, variables) ? undefined : "Not defined in the active environment, collection, or globals"}>
+  return splitVariableTokens(value).map((run, i) => {
+    if (!run.isVariable) return <span key={i}>{run.text}</span>;
+    const found = findVariable(run.key!, variables);
+    const title = found ? `${run.key} = ${found.value || "(empty)"}` : "Not defined in the active environment, collection, or globals";
+    return (
+      <span key={i} className={`var-token${found ? "" : " unresolved"}`} title={title}>
         {run.text}
       </span>
-    ) : (
-      <span key={i}>{run.text}</span>
-    ),
-  );
+    );
+  });
 }
 
 interface VariableInputProps {

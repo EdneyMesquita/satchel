@@ -598,7 +598,7 @@ textarea.field-native { resize: vertical; }
   font: inherit;
 }
 .field-backdrop.multiline { white-space: pre-wrap; word-break: break-word; overflow: auto; }
-.var-token { color: var(--accent-strong); font-weight: 600; }
+.var-token { color: var(--accent-strong); font-weight: 600; pointer-events: auto; cursor: help; }
 .var-token.unresolved {
   color: var(--del);
   text-decoration: underline wavy var(--del);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isVariableResolved, splitVariableTokens } from "./variableTokens";
+import { findVariable, isVariableResolved, splitVariableTokens } from "./variableTokens";
 
 describe("splitVariableTokens", () => {
   it("splits plain text with no variables into a single run", () => {
@@ -36,5 +36,18 @@ describe("isVariableResolved", () => {
     expect(isVariableResolved("host", vars)).toBe(true);
     expect(isVariableResolved("disabled", vars)).toBe(false);
     expect(isVariableResolved("missing", vars)).toBe(false);
+  });
+});
+
+describe("findVariable", () => {
+  it("returns the matching enabled variable, powering the hover tooltip's value", () => {
+    const vars = [{ key: "host", value: "api.example.com", enabled: true }];
+    expect(findVariable("host", vars)).toEqual({ key: "host", value: "api.example.com", enabled: true });
+  });
+
+  it("returns undefined for a disabled or missing variable", () => {
+    const vars = [{ key: "disabled", value: "x", enabled: false }];
+    expect(findVariable("disabled", vars)).toBeUndefined();
+    expect(findVariable("missing", vars)).toBeUndefined();
   });
 });
