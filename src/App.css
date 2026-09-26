@@ -284,6 +284,7 @@ input, select, textarea {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  min-height: 0; /* same grid-item overflow pitfall as .main */
   padding: 14px 10px;
   gap: 12px;
   overflow-y: auto;
@@ -678,7 +679,19 @@ input, select, textarea {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0; /* grid items default to min-height:auto (content-based),
+    which defeats overflow-y:auto — a long header list just grows the whole
+    window instead of scrolling, and in the native app there's no browser
+    chrome scrollbar to fall back on, so the tabs above become unreachable. */
   overflow-y: auto;
+}
+
+.main-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex: none;
+  background: var(--bg);
 }
 
 .req-bar {

@@ -225,40 +225,42 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
 
   return (
     <div className="main">
-      <div className="req-bar">
-        <select className="method-select" value={request.method} onChange={(e) => patch({ method: e.target.value as HttpMethod })}>
-          {METHODS.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-        <VariableInput
-          className="url-field"
-          value={request.url}
-          variables={variables}
-          onChange={(url) => patch({ url })}
-          onPaste={handleUrlPaste}
-          placeholder="https://api.example.com/{{resource}} — or paste a curl command"
-        />
-        <button className="btn primary" onClick={send} disabled={sending || !request.url}>
-          {sending ? "Sending…" : "Send"}
-        </button>
-      </div>
+      <div className="main-toolbar">
+        <div className="req-bar">
+          <select className="method-select" value={request.method} onChange={(e) => patch({ method: e.target.value as HttpMethod })}>
+            {METHODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <VariableInput
+            className="url-field"
+            value={request.url}
+            variables={variables}
+            onChange={(url) => patch({ url })}
+            onPaste={handleUrlPaste}
+            placeholder="https://api.example.com/{{resource}} — or paste a curl command"
+          />
+          <button className="btn primary" onClick={send} disabled={sending || !request.url}>
+            {sending ? "Sending…" : "Send"}
+          </button>
+        </div>
 
-      <div className="tabs">
-        <button className={`tab${tab === "params" ? " active" : ""}`} onClick={() => setTab("params")}>
-          Params <span className="count">{request.params.length}</span>
-        </button>
-        <button className={`tab${tab === "headers" ? " active" : ""}`} onClick={() => setTab("headers")}>
-          Headers <span className="count">{request.headers.length}</span>
-        </button>
-        <button className={`tab${tab === "body" ? " active" : ""}`} onClick={() => setTab("body")}>
-          Body
-        </button>
-        <button className={`tab${tab === "auth" ? " active" : ""}`} onClick={() => setTab("auth")}>
-          Auth
-        </button>
+        <div className="tabs">
+          <button className={`tab${tab === "params" ? " active" : ""}`} onClick={() => setTab("params")}>
+            Params <span className="count">{request.params.length}</span>
+          </button>
+          <button className={`tab${tab === "headers" ? " active" : ""}`} onClick={() => setTab("headers")}>
+            Headers <span className="count">{request.headers.length}</span>
+          </button>
+          <button className={`tab${tab === "body" ? " active" : ""}`} onClick={() => setTab("body")}>
+            Body
+          </button>
+          <button className={`tab${tab === "auth" ? " active" : ""}`} onClick={() => setTab("auth")}>
+            Auth
+          </button>
+        </div>
       </div>
 
       {tab === "params" && <KvEditor rows={request.params} variables={variables} onChange={(params) => patch({ params })} />}
