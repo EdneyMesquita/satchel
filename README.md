@@ -13,6 +13,8 @@ Satchel is a standalone tool first: build collections, folders, and requests dir
 - Paste a `curl` command to create and open a request from it — either from the sidebar, or directly into an open request's URL field to replace its method/headers/body/auth in place
 - Save/open a workspace as a plain `.json` file on disk, with an in-memory `localStorage` cache so nothing's lost before you've picked a save location
 - Six color themes (`src/themes.ts`), picked from the palette icon next to the app name and persisted across launches
+- A VS Code–style status bar across the bottom: workspace file/save state, active environment, the open request, and collection/request counts
+- VS Code–style raw JSON body editing: Tab indents instead of moving focus, real syntax coloring for keys/strings/numbers/booleans (`src/jsonTokens.ts`)
 
 ## Stack
 

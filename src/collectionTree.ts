@@ -57,6 +57,10 @@ export function renameNode(items: TreeNode[], id: string, name: string): TreeNod
   });
 }
 
+export function countRequests(items: TreeNode[]): number {
+  return items.reduce((total, node) => total + (node.type === "request" ? 1 : countRequests(node.children)), 0);
+}
+
 export function findRequest(items: TreeNode[], id: string): SatchelRequest | undefined {
   for (const node of items) {
     if (node.type === "request") {

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { Sidebar } from "./components/Sidebar";
 import { RequestEditor } from "./components/RequestEditor";
+import { StatusBar } from "./components/StatusBar";
 import { parsePostmanCollection, PostmanImportError } from "./postman";
 import {
   addNode,
+  countRequests,
   createCollection,
   createEnvironment,
   createFolder,
@@ -255,54 +257,65 @@ export default function App() {
   // Precedence, highest first: active environment > collection > globals.
   const mergedVariables: KeyValue[] = [...(activeEnvironment?.variables ?? []), ...(activeCollection?.variables ?? []), ...globals];
 
+  const requestsCount = collections.reduce((total, c) => total + countRequests(c.items), 0);
+
   return (
-    <div className="shell">
-      <Sidebar
-        collections={collections}
-        selectedRequestId={selectedRequestId}
-        onSelectRequest={setSelectedRequestId}
-        onImportFile={handleImportFile}
-        onPasteCurl={handlePasteCurl}
-        onCreateCollection={handleCreateCollection}
-        onAddFolder={handleAddFolder}
-        onAddRequest={handleAddRequest}
-        onQuickAddRequest={handleQuickAddRequest}
-        onRenameCollection={handleRenameCollection}
-        onRenameNode={handleRenameNode}
-        onDeleteCollection={handleDeleteCollection}
-        onDeleteNode={handleDeleteNode}
-        environments={environments}
-        activeEnvironmentId={activeEnvironmentId}
-        onSetActiveEnvironment={setActiveEnvironmentId}
-        onCreateEnvironment={handleCreateEnvironment}
-        onRenameEnvironment={handleRenameEnvironment}
-        onDeleteEnvironment={handleDeleteEnvironment}
-        onUpdateEnvironmentVariables={handleUpdateEnvironmentVariables}
-        globals={globals}
-        onUpdateGlobals={setGlobals}
-        fileName={filePath ? basename(filePath) : null}
-        onSaveFile={handleSaveFile}
-        onOpenFile={handleOpenFile}
-      />
-      {banner && (
-        <div style={{ position: "fixed", bottom: 16, left: 16, background: "var(--del)", color: "white", padding: "10px 14px", borderRadius: 8, fontSize: 12.5, maxWidth: 340, zIndex: 200 }}>
-          {banner}
-        </div>
-      )}
-      {selectedRequest ? (
-        <RequestEditor
-          key={selectedRequest.id}
-          request={selectedRequest}
-          variables={mergedVariables}
-          onChange={(updater) =>
-            setCollections((prev) => updateRequestInCollections(prev, selectedRequest.id, updater))
-          }
+    <div className="app-root">
+      <div className="shell">
+        <Sidebar
+          collections={collections}
+          selectedRequestId={selectedRequestId}
+          onSelectRequest={setSelectedRequestId}
+          onImportFile={handleImportFile}
+          onPasteCurl={handlePasteCurl}
+          onCreateCollection={handleCreateCollection}
+          onAddFolder={handleAddFolder}
+          onAddRequest={handleAddRequest}
+          onQuickAddRequest={handleQuickAddRequest}
+          onRenameCollection={handleRenameCollection}
+          onRenameNode={handleRenameNode}
+          onDeleteCollection={handleDeleteCollection}
+          onDeleteNode={handleDeleteNode}
+          environments={environments}
+          activeEnvironmentId={activeEnvironmentId}
+          onSetActiveEnvironment={setActiveEnvironmentId}
+          onCreateEnvironment={handleCreateEnvironment}
+          onRenameEnvironment={handleRenameEnvironment}
+          onDeleteEnvironment={handleDeleteEnvironment}
+          onUpdateEnvironmentVariables={handleUpdateEnvironmentVariables}
+          globals={globals}
+          onUpdateGlobals={setGlobals}
+          fileName={filePath ? basename(filePath) : null}
+          onSaveFile={handleSaveFile}
+          onOpenFile={handleOpenFile}
         />
-      ) : (
-        <div className="main" style={{ alignItems: "center", justifyContent: "center", display: "flex", color: "var(--ink-faint)" }}>
-          Create a request, or import a Postman collection to get started.
-        </div>
-      )}
+        {banner && (
+          <div style={{ position: "fixed", bottom: 40, left: 16, background: "var(--del)", color: "white", padding: "10px 14px", borderRadius: 8, fontSize: 12.5, maxWidth: 340, zIndex: 200 }}>
+            {banner}
+          </div>
+        )}
+        {selectedRequest ? (
+          <RequestEditor
+            key={selectedRequest.id}
+            request={selectedRequest}
+            variables={mergedVariables}
+            onChange={(updater) =>
+              setCollections((prev) => updateRequestInCollections(prev, selectedRequest.id, updater))
+            }
+          />
+        ) : (
+          <div className="main" style={{ alignItems: "center", justifyContent: "center", display: "flex", color: "var(--ink-faint)" }}>
+            Create a request, or import a Postman collection to get started.
+          </div>
+        )}
+      </div>
+      <StatusBar
+        fileName={filePath ? basename(filePath) : null}
+        environmentName={activeEnvironment?.name ?? "No Environment"}
+        collectionsCount={collections.length}
+        requestsCount={requestsCount}
+        selectedRequest={selectedRequest}
+      />
     </div>
   );
 }

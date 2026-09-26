@@ -187,14 +187,41 @@ input, select, textarea {
 }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+.app-root { display: flex; flex-direction: column; height: 100vh; }
+
 .shell {
   display: grid;
   grid-template-columns: 260px 1fr;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
 }
 
+.status-bar {
+  flex: none;
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 24px;
+  padding-inline: 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+}
+.status-bar-group { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.status-bar-group span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 @media (max-width: 720px) {
-  .shell { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
+  /* Sidebar and main stack instead of sitting side by side, and can grow
+     taller than one screen — let the whole app scroll instead of the
+     (now flex-fixed-height) shell trying to clip its own overflow. */
+  .app-root { height: auto; min-height: 100vh; }
+  .shell { grid-template-columns: 1fr; flex: none; height: auto; }
   .sidebar { max-height: 260px; }
 }
 
