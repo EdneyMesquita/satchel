@@ -1,9 +1,13 @@
-import type { Collection, FolderNode, RequestNode, SatchelRequest, TreeNode } from "./types";
+import type { Collection, Environment, FolderNode, KeyValue, RequestNode, SatchelRequest, TreeNode } from "./types";
 
 const newId = () => crypto.randomUUID();
 
 export function createCollection(name: string): Collection {
   return { id: newId(), name, variables: [], items: [] };
+}
+
+export function createEnvironment(name: string): Environment {
+  return { id: newId(), name, variables: [] };
 }
 
 export function createFolder(name: string): FolderNode {
@@ -88,9 +92,9 @@ export function updateRequestInCollections(
   }));
 }
 
-export function resolveVariables(text: string, variables: { key: string; value: string }[]): string {
-  return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    const found = variables.find((v) => v.key === key);
+export function resolveVariables(text: string, variables: KeyValue[]): string {
+  return text.replace(/\{\{([\w.-]+)\}\}/g, (match, key) => {
+    const found = variables.find((v) => v.key === key && v.enabled);
     return found ? found.value : match;
   });
 }
