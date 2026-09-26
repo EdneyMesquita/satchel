@@ -6,6 +6,7 @@ import { isTauri } from "../platform";
 import { parseCurl } from "../curl";
 import { KvEditor } from "./KvEditor";
 import { VariableInput, VariableTextarea } from "./VariableField";
+import { tokenizeJsonLike, JSON_TOKEN_CLASS } from "../jsonTokens";
 
 interface RequestEditorProps {
   request: SatchelRequest;
@@ -20,10 +21,25 @@ interface ResponseState {
   sizeBytes: number;
   headers: [string, string][];
   bodyText: string;
+  isJson: boolean;
 }
 
 const METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 type Tab = "params" | "headers" | "body" | "auth";
+type ResponseTab = "body" | "headers";
+
+function JsonView({ text, isJson }: { text: string; isJson: boolean }) {
+  if (!isJson) return <>{text}</>;
+  return (
+    <>
+      {tokenizeJsonLike(text).map((run, i) => (
+        <span key={i} className={JSON_TOKEN_CLASS[run.kind]}>
+          {run.text}
+        </span>
+      ))}
+    </>
+  );
+}
 
 export function buildHeaders(request: SatchelRequest, variables: KeyValue[]): Headers {
   const headers = new Headers();
@@ -177,6 +193,7 @@ function BodyEditor({ body, onChange, variables }: { body: RequestBody; onChange
 export function RequestEditor({ request, variables, onChange }: RequestEditorProps) {
   const [tab, setTab] = useState<Tab>("headers");
   const [response, setResponse] = useState<ResponseState | null>(null);
+  const [responseTab, setResponseTab] = useState<ResponseTab>("body");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -208,14 +225,17 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
       const doFetch = isTauri() ? tauriFetch : window.fetch;
       const res = await doFetch(url, { method: request.method, headers, body: hasBody ? body : undefined });
       const text = await res.text();
+      const contentType = res.headers.get("content-type");
       setResponse({
         status: res.status,
         ok: res.ok,
         timeMs: Math.round(performance.now() - started),
         sizeBytes: new Blob([text]).size,
         headers: Array.from(res.headers.entries()),
-        bodyText: formatBody(text, res.headers.get("content-type")),
+        bodyText: formatBody(text, contentType),
+        isJson: contentType?.includes("json") ?? false,
       });
+      setResponseTab("body");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request failed");
     } finally {
@@ -282,8 +302,29 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
                   <span className={`status-pill ${response.ok ? "ok" : "err"}`}>{response.status}</span>
                   <span className="stat">{response.timeMs} ms</span>
                   <span className="stat">{(response.sizeBytes / 1024).toFixed(1)} KB</span>
+                  <div className="resp-tabs">
+                    <button className={`resp-tab${responseTab === "body" ? " active" : ""}`} onClick={() => setResponseTab("body")}>
+                      Body
+                    </button>
+                    <button className={`resp-tab${responseTab === "headers" ? " active" : ""}`} onClick={() => setResponseTab("headers")}>
+                      Headers <span className="count">{response.headers.length}</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="json-view">{response.bodyText}</div>
+                {responseTab === "body" ? (
+                  <div className="json-view">
+                    <JsonView text={response.bodyText} isJson={response.isJson} />
+                  </div>
+                ) : (
+                  <div className="resp-headers">
+                    {response.headers.map(([key, value]) => (
+                      <div className="resp-header-row" key={key}>
+                        <span className="k">{key}</span>
+                        <span className="v">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )
           )}

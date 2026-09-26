@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyValue } from "../types";
 import { findVariable, splitVariableTokens } from "../variableTokens";
-import { tokenizeJsonLike, type JsonTokenKind } from "../jsonTokens";
+import { tokenizeJsonLike, JSON_TOKEN_CLASS } from "../jsonTokens";
 
 const INDENT = "  ";
 const TOOLTIP_DELAY = 300;
@@ -83,17 +83,8 @@ function renderTokens(value: string, variables: KeyValue[], hover: HoverHandlers
   return renderVariableRuns(value, variables, "r", hover);
 }
 
-const JSON_CLASS: Record<JsonTokenKind, string | undefined> = {
-  key: "json-key",
-  string: "json-string",
-  number: "json-number",
-  literal: "json-literal",
-  punct: "json-punct",
-  text: undefined,
-};
-
 function renderJsonTokens(value: string, variables: KeyValue[], hover: HoverHandlers) {
-  return tokenizeJsonLike(value).flatMap((run, i) => renderVariableRuns(run.text, variables, `j${i}`, hover, JSON_CLASS[run.kind]));
+  return tokenizeJsonLike(value).flatMap((run, i) => renderVariableRuns(run.text, variables, `j${i}`, hover, JSON_TOKEN_CLASS[run.kind]));
 }
 
 function insertIndent(el: HTMLTextAreaElement, onChange: (value: string) => void) {

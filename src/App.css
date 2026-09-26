@@ -820,6 +820,21 @@ textarea.field-native { resize: vertical; }
 .status-pill.ok { background: var(--ok-bg); color: var(--post); }
 .status-pill.err { background: var(--danger-bg); color: var(--del); }
 .resp-meta .stat { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+.resp-tabs { display: flex; gap: 4px; margin-left: auto; }
+.resp-tab {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  background: none;
+  border: none;
+  padding: 5px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.resp-tab:hover { color: var(--ink); }
+.resp-tab.active { background: var(--surface-3); color: var(--ink); }
+.resp-tab .count { color: var(--ink-faint); font-weight: 500; }
 .json-view {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -834,5 +849,26 @@ textarea.field-native { resize: vertical; }
   max-height: 360px;
   overflow-y: auto;
 }
+.resp-headers {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.resp-header-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 260px) 1fr;
+  gap: 12px;
+  padding: 4px 0;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.resp-header-row .k { color: var(--ink-soft); font-weight: 600; }
+.resp-header-row .v { color: var(--ink); overflow-wrap: anywhere; }
 
 .field-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }

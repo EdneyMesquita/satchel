@@ -5,6 +5,17 @@ export interface JsonRun {
   kind: JsonTokenKind;
 }
 
+// Shared between the editable body (VariableField's backdrop) and the
+// read-only response viewer, so both color JSON identically.
+export const JSON_TOKEN_CLASS: Record<JsonTokenKind, string | undefined> = {
+  key: "json-key",
+  string: "json-string",
+  number: "json-number",
+  literal: "json-literal",
+  punct: "json-punct",
+  text: undefined,
+};
+
 // Lenient lexer, not a parser: the body is often invalid/incomplete JSON
 // while someone is mid-edit, so this just classifies tokens by shape
 // (VSCode-style: a string immediately followed by `:` reads as a key)
