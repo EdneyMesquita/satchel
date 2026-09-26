@@ -19,6 +19,11 @@
   --del: #e27c6e;
   --danger-bg: #3a221f;
   --ok-bg: #1c3527;
+
+  --json-key: #9cdcfe;
+  --json-string: #ce9178;
+  --json-number: #b5cea8;
+  --json-literal: #569cd6;
 }
 
 :root[data-theme="parchment"] {
@@ -41,6 +46,11 @@
   --del: #b84438;
   --danger-bg: #f4d9d5;
   --ok-bg: #d9f0e0;
+
+  --json-key: #0451a5;
+  --json-string: #a31515;
+  --json-number: #098658;
+  --json-literal: #0000ff;
 }
 
 :root[data-theme="terminal"] {
@@ -63,6 +73,11 @@
   --del: #e27c6e;
   --danger-bg: #3a221f;
   --ok-bg: #1c3527;
+
+  --json-key: #9cdcfe;
+  --json-string: #ce9178;
+  --json-number: #b5cea8;
+  --json-literal: #569cd6;
 }
 
 :root[data-theme="nightshift"] {
@@ -85,6 +100,11 @@
   --del: #e27c6e;
   --danger-bg: #3a221f;
   --ok-bg: #1c3527;
+
+  --json-key: #9cdcfe;
+  --json-string: #ce9178;
+  --json-number: #b5cea8;
+  --json-literal: #569cd6;
 }
 
 :root[data-theme="sunbaked"] {
@@ -107,6 +127,11 @@
   --del: #e27c6e;
   --danger-bg: #3a221f;
   --ok-bg: #1c3527;
+
+  --json-key: #9cdcfe;
+  --json-string: #ce9178;
+  --json-number: #b5cea8;
+  --json-literal: #569cd6;
 }
 
 :root[data-theme="slate"] {
@@ -129,6 +154,11 @@
   --del: #e27c6e;
   --danger-bg: #3a221f;
   --ok-bg: #1c3527;
+
+  --json-key: #9cdcfe;
+  --json-string: #ce9178;
+  --json-number: #b5cea8;
+  --json-literal: #569cd6;
 }
 
 :root {
@@ -604,6 +634,11 @@ textarea.field-native { resize: vertical; }
   text-decoration: underline wavy var(--del);
   text-underline-offset: 2px;
 }
+.json-key { color: var(--json-key); }
+.json-string { color: var(--json-string); }
+.json-number { color: var(--json-number); }
+.json-literal { color: var(--json-literal); }
+.json-punct { color: var(--ink-faint); }
 .btn {
   border-radius: 7px;
   padding: 9px 16px;

@@ -160,6 +160,7 @@ function BodyEditor({ body, onChange, variables }: { body: RequestBody; onChange
           className="raw-body"
           value={body.raw}
           variables={variables}
+          syntax={body.language === "json" ? "json" : "plain"}
           onChange={(raw) => {
             onChange({ ...body, raw });
             setBeautifyError(false);
