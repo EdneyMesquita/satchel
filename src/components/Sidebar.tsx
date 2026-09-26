@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Collection, Environment, KeyValue, TreeNode } from "../types";
 import { EnvironmentsModal } from "./EnvironmentsModal";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 
 interface SidebarProps {
   collections: Collection[];
@@ -195,6 +196,7 @@ export function Sidebar({
           <path d="M14 26C14 20.4772 18.4772 16 24 16H40C45.5228 16 50 20.4772 50 26V27H14V26Z" fill="currentColor" opacity="0.6" />
         </svg>
         Satchel
+        <ThemeSwitcher />
       </div>
 
       <div className="sidebar-actions">

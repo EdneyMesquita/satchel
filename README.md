@@ -10,8 +10,9 @@ Satchel is a standalone tool first: build collections, folders, and requests dir
 - Environments (e.g. "Local" / "Production") plus a Postman-style **Globals** bucket that applies regardless of which environment is active. Precedence: environment → collection → globals
 - `{{variable}}` substitution in URLs, headers, params, and bodies
 - Params / Headers / Body (raw or `x-www-form-urlencoded`) / Auth (Bearer, Basic, API key) tabs, with a JSON "Beautify" button
-- Paste a `curl` command to create and open a request from it
+- Paste a `curl` command to create and open a request from it — either from the sidebar, or directly into an open request's URL field to replace its method/headers/body/auth in place
 - Save/open a workspace as a plain `.json` file on disk, with an in-memory `localStorage` cache so nothing's lost before you've picked a save location
+- Six color themes (`src/themes.ts`), picked from the palette icon next to the app name and persisted across launches
 
 ## Stack
 
