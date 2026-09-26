@@ -122,20 +122,30 @@ input, select, textarea {
 }
 .brand svg { flex: none; color: var(--accent); }
 
-.import-btn {
+.sidebar-actions { display: flex; flex-direction: column; gap: 6px; }
+.new-btn, .import-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.new-btn {
   background: var(--accent);
   color: var(--accent-ink);
   border: none;
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-weight: 600;
-  cursor: pointer;
 }
-.import-btn:hover { background: var(--accent-strong); }
+.new-btn:hover { background: var(--accent-strong); }
+.import-btn {
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1px solid var(--border);
+}
+.import-btn:hover { background: var(--surface-3); color: var(--ink); }
 
 .empty-state {
   margin: auto;
@@ -158,17 +168,69 @@ input, select, textarea {
   font-weight: 600;
   font-size: 12.5px;
   padding: 6px 6px;
+  border-radius: 6px;
 }
+.tree-collection:hover { background: var(--surface-3); }
 .tree-collection svg { flex: none; color: var(--accent); }
+.tree-collection > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-folder-row {
+  display: flex;
+  align-items: center;
+  padding: 5px 6px 5px 0;
+  border-radius: 6px;
+}
+.tree-folder-row:hover { background: var(--surface-3); }
 .tree-folder {
+  flex: 1;
+  min-width: 0;
   font-weight: 500;
   font-size: 12px;
   color: var(--ink-soft);
-  padding: 5px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0;
+  pointer-events: none;
+  flex: none;
+}
+.tree-collection:hover .row-actions,
+.tree-folder-row:hover .row-actions,
+.tree-req:hover .row-actions.single {
+  opacity: 1;
+  pointer-events: auto;
+}
+.row-actions button, .row-actions.single {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  border-radius: 5px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  flex: none;
+  padding: 0;
+}
+.row-actions button:hover, .row-actions.single:hover { background: var(--surface); color: var(--ink); }
+.row-actions.single:hover { color: var(--del); }
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-family: var(--mono);
+  padding: 2px 5px;
+  border-radius: 5px;
 }
 .tree-req {
   display: grid;
-  grid-template-columns: 38px 1fr;
+  grid-template-columns: 38px 1fr 20px;
   align-items: center;
   gap: 8px;
   padding: 5px 6px;

@@ -113,10 +113,10 @@ function toBody(body: PmBody | undefined): RequestBody {
   return { mode: "raw", raw: "", language: "text" };
 }
 
-function toRequest(name: string, pmRequest: PmRequest): SatchelRequest {
+function toRequest(id: string, name: string, pmRequest: PmRequest): SatchelRequest {
   const method = (pmRequest.method ?? "GET").toUpperCase() as SatchelRequest["method"];
   return {
-    id: newId(),
+    id,
     name,
     method,
     url: toUrlString(pmRequest.url),
@@ -130,7 +130,8 @@ function toRequest(name: string, pmRequest: PmRequest): SatchelRequest {
 function toTreeNode(item: PmItem): TreeNode {
   const name = item.name ?? "Untitled";
   if (item.request) {
-    return { type: "request", id: newId(), request: toRequest(name, item.request) };
+    const id = newId();
+    return { type: "request", id, request: toRequest(id, name, item.request) };
   }
   return {
     type: "folder",
