@@ -666,6 +666,23 @@ textarea.field-native { resize: vertical; }
 .json-number { color: var(--json-number); }
 .json-literal { color: var(--json-literal); }
 .json-punct { color: var(--ink-faint); }
+.var-tooltip {
+  position: fixed;
+  z-index: 500;
+  max-width: 320px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .btn {
   border-radius: 7px;
   padding: 9px 16px;
