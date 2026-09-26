@@ -3,6 +3,7 @@ import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AuthConfig, HttpMethod, KeyValue, RequestBody, SatchelRequest } from "../types";
 import { resolveVariables } from "../collectionTree";
 import { isTauri } from "../platform";
+import { parseCurl } from "../curl";
 import { KvEditor } from "./KvEditor";
 
 interface RequestEditorProps {
@@ -160,6 +161,19 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
 
   const patch = (fields: Partial<SatchelRequest>) => onChange((r) => ({ ...r, ...fields }));
 
+  const handleUrlPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    if (!/^\s*curl\b/i.test(text)) return;
+    try {
+      const parsed = parseCurl(text);
+      e.preventDefault();
+      patch({ method: parsed.method, url: parsed.url, params: [], headers: parsed.headers, body: parsed.body, auth: parsed.auth });
+    } catch {
+      // Looked like curl but didn't parse — fall through to a normal paste
+      // so the raw text lands in the field instead of silently vanishing.
+    }
+  };
+
   async function send() {
     setSending(true);
     setError(null);
@@ -203,7 +217,13 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
             </option>
           ))}
         </select>
-        <input className="url-field" value={request.url} onChange={(e) => patch({ url: e.target.value })} placeholder="https://api.example.com/{{resource}}" />
+        <input
+          className="url-field"
+          value={request.url}
+          onChange={(e) => patch({ url: e.target.value })}
+          onPaste={handleUrlPaste}
+          placeholder="https://api.example.com/{{resource}} — or paste a curl command"
+        />
         <button className="btn primary" onClick={send} disabled={sending || !request.url}>
           {sending ? "Sending…" : "Send"}
         </button>
