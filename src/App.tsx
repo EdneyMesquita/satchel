@@ -158,6 +158,23 @@ export default function App() {
     return node.id;
   }
 
+  // For "+ New request" with no collection selected: drop it in the first
+  // collection, or create one to hold it if there isn't one yet — you
+  // shouldn't need a collection to exist before you can start a request.
+  function handleQuickAddRequest(): { collectionId: string; requestId: string } {
+    const node = createRequest("New Request");
+    if (collections.length === 0) {
+      const collection = { ...createCollection("My Requests"), items: [node] };
+      setCollections([collection]);
+      setSelectedRequestId(node.id);
+      return { collectionId: collection.id, requestId: node.id };
+    }
+    const targetId = collections[0].id;
+    setCollections((prev) => prev.map((c, i) => (i === 0 ? { ...c, items: [...c.items, node] } : c)));
+    setSelectedRequestId(node.id);
+    return { collectionId: targetId, requestId: node.id };
+  }
+
   function handleRenameCollection(collectionId: string, name: string) {
     setCollections((prev) => prev.map((c) => (c.id === collectionId ? { ...c, name } : c)));
   }
@@ -249,6 +266,7 @@ export default function App() {
         onCreateCollection={handleCreateCollection}
         onAddFolder={handleAddFolder}
         onAddRequest={handleAddRequest}
+        onQuickAddRequest={handleQuickAddRequest}
         onRenameCollection={handleRenameCollection}
         onRenameNode={handleRenameNode}
         onDeleteCollection={handleDeleteCollection}

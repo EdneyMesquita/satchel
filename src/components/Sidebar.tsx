@@ -11,6 +11,7 @@ interface SidebarProps {
   onCreateCollection: () => string;
   onAddFolder: (collectionId: string, parentFolderId: string | null) => string;
   onAddRequest: (collectionId: string, parentFolderId: string | null) => string;
+  onQuickAddRequest: () => { collectionId: string; requestId: string };
   onRenameCollection: (collectionId: string, name: string) => void;
   onRenameNode: (collectionId: string, nodeId: string, name: string) => void;
   onDeleteCollection: (collectionId: string) => void;
@@ -75,6 +76,7 @@ export function Sidebar({
   onCreateCollection,
   onAddFolder,
   onAddRequest,
+  onQuickAddRequest,
   onRenameCollection,
   onRenameNode,
   onDeleteCollection,
@@ -196,15 +198,26 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-actions">
-        <button
-          className="new-btn"
-          onClick={() => {
-            const id = onCreateCollection();
-            setRenaming({ kind: "collection", id, value: "New Collection" });
-          }}
-        >
-          + New collection
-        </button>
+        <div className="new-row">
+          <button
+            className="new-btn"
+            onClick={() => {
+              const { collectionId, requestId } = onQuickAddRequest();
+              setRenaming({ kind: "node", collectionId, id: requestId, value: "New Request" });
+            }}
+          >
+            + Request
+          </button>
+          <button
+            className="new-btn"
+            onClick={() => {
+              const id = onCreateCollection();
+              setRenaming({ kind: "collection", id, value: "New Collection" });
+            }}
+          >
+            + Collection
+          </button>
+        </div>
         <button className="import-btn" onClick={() => fileInputRef.current?.click()}>
           Import Postman
         </button>

@@ -123,6 +123,8 @@ input, select, textarea {
 .brand svg { flex: none; color: var(--accent); }
 
 .sidebar-actions { display: flex; flex-direction: column; gap: 6px; }
+.new-row { display: flex; gap: 6px; }
+.new-row .new-btn { flex: 1; padding-inline: 6px; }
 .new-btn, .import-btn {
   display: flex;
   align-items: center;
