@@ -2,6 +2,8 @@ import { useState } from "react";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AuthConfig, HttpMethod, KeyValue, RequestBody, SatchelRequest } from "../types";
 import { resolveVariables } from "../collectionTree";
+import { isTauri } from "../platform";
+import { KvEditor } from "./KvEditor";
 
 interface RequestEditorProps {
   request: SatchelRequest;
@@ -20,8 +22,6 @@ interface ResponseState {
 
 const METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 type Tab = "params" | "headers" | "body" | "auth";
-
-const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 function buildHeaders(request: SatchelRequest): Headers {
   const headers = new Headers();
@@ -45,37 +45,6 @@ function buildUrl(request: SatchelRequest, variables: KeyValue[]): string {
     url.searchParams.set(request.auth.key, request.auth.value);
   }
   return url.toString();
-}
-
-function KvEditor({
-  rows,
-  onChange,
-}: {
-  rows: KeyValue[];
-  onChange: (rows: KeyValue[]) => void;
-}) {
-  const update = (index: number, patch: Partial<KeyValue>) =>
-    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-  const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
-  const add = () => onChange([...rows, { key: "", value: "", enabled: true }]);
-
-  return (
-    <div className="panel">
-      {rows.map((row, i) => (
-        <div className="kv-row" key={i}>
-          <input type="checkbox" checked={row.enabled} onChange={(e) => update(i, { enabled: e.target.checked })} />
-          <input placeholder="Key" value={row.key} onChange={(e) => update(i, { key: e.target.value })} />
-          <input placeholder="Value" value={row.value} onChange={(e) => update(i, { value: e.target.value })} />
-          <button className="remove" onClick={() => remove(i)} aria-label="Remove">
-            ×
-          </button>
-        </div>
-      ))}
-      <button className="add-row" onClick={add}>
-        + Add
-      </button>
-    </div>
-  );
 }
 
 function AuthEditor({ auth, onChange }: { auth: AuthConfig; onChange: (auth: AuthConfig) => void }) {
@@ -127,23 +96,56 @@ function authOfType(type: AuthConfig["type"]): AuthConfig {
 }
 
 function BodyEditor({ body, onChange }: { body: RequestBody; onChange: (body: RequestBody) => void }) {
+  const [beautifyError, setBeautifyError] = useState(false);
+
+  const beautify = () => {
+    if (body.mode !== "raw") return;
+    try {
+      const formatted = JSON.stringify(JSON.parse(body.raw), null, 2);
+      onChange({ ...body, raw: formatted, language: "json" });
+      setBeautifyError(false);
+    } catch {
+      setBeautifyError(true);
+    }
+  };
+
   return (
     <div className="panel">
-      <select
-        value={body.mode}
-        onChange={(e) => {
-          const mode = e.target.value as RequestBody["mode"];
-          if (mode === "raw") onChange({ mode: "raw", raw: "", language: "json" });
-          else if (mode === "urlencoded") onChange({ mode: "urlencoded", params: [] });
-          else onChange({ mode: "none" });
-        }}
-      >
-        <option value="none">None</option>
-        <option value="raw">Raw (JSON)</option>
-        <option value="urlencoded">x-www-form-urlencoded</option>
-      </select>
+      <div className="body-mode-row">
+        <select
+          value={body.mode}
+          onChange={(e) => {
+            const mode = e.target.value as RequestBody["mode"];
+            if (mode === "raw") onChange({ mode: "raw", raw: "", language: "json" });
+            else if (mode === "urlencoded") onChange({ mode: "urlencoded", params: [] });
+            else onChange({ mode: "none" });
+          }}
+        >
+          <option value="none">None</option>
+          <option value="raw">Raw (JSON)</option>
+          <option value="urlencoded">x-www-form-urlencoded</option>
+        </select>
+        {body.mode === "raw" && (
+          <button
+            className="beautify-btn"
+            onClick={beautify}
+            title="Format and indent this JSON"
+          >
+            Beautify
+          </button>
+        )}
+        {beautifyError && <span className="beautify-error">Invalid JSON — can't format it</span>}
+      </div>
       {body.mode === "raw" && (
-        <textarea className="raw-body" value={body.raw} onChange={(e) => onChange({ ...body, raw: e.target.value })} spellCheck={false} />
+        <textarea
+          className="raw-body"
+          value={body.raw}
+          onChange={(e) => {
+            onChange({ ...body, raw: e.target.value });
+            setBeautifyError(false);
+          }}
+          spellCheck={false}
+        />
       )}
       {body.mode === "urlencoded" && <KvEditor rows={body.params} onChange={(params) => onChange({ mode: "urlencoded", params })} />}
     </div>

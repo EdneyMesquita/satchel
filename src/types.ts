@@ -56,3 +56,16 @@ export interface Collection {
   variables: KeyValue[];
   items: TreeNode[];
 }
+
+export interface Environment {
+  id: string;
+  name: string;
+  variables: KeyValue[];
+}
+
+export interface Workspace {
+  collections: Collection[];
+  environments: Environment[];
+  activeEnvironmentId: string | null;
+  globals: KeyValue[];
+}

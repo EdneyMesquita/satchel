@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
-import type { Collection, TreeNode } from "../types";
+import type { Collection, Environment, KeyValue, TreeNode } from "../types";
+import { EnvironmentsModal } from "./EnvironmentsModal";
 
 interface SidebarProps {
   collections: Collection[];
   selectedRequestId: string | null;
   onSelectRequest: (requestId: string) => void;
   onImportFile: (file: File) => void;
+  onPasteCurl: () => void;
   onCreateCollection: () => string;
   onAddFolder: (collectionId: string, parentFolderId: string | null) => string;
   onAddRequest: (collectionId: string, parentFolderId: string | null) => string;
@@ -13,6 +15,18 @@ interface SidebarProps {
   onRenameNode: (collectionId: string, nodeId: string, name: string) => void;
   onDeleteCollection: (collectionId: string) => void;
   onDeleteNode: (collectionId: string, nodeId: string) => void;
+  environments: Environment[];
+  activeEnvironmentId: string | null;
+  onSetActiveEnvironment: (id: string | null) => void;
+  onCreateEnvironment: () => string;
+  onRenameEnvironment: (id: string, name: string) => void;
+  onDeleteEnvironment: (id: string) => void;
+  onUpdateEnvironmentVariables: (id: string, variables: KeyValue[]) => void;
+  globals: KeyValue[];
+  onUpdateGlobals: (variables: KeyValue[]) => void;
+  fileName: string | null;
+  onSaveFile: () => void;
+  onOpenFile: () => void;
 }
 
 type Renaming = { kind: "collection"; id: string; value: string } | { kind: "node"; collectionId: string; id: string; value: string };
@@ -43,12 +57,21 @@ function TrashIcon() {
     </svg>
   );
 }
+function GearIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="2.3" />
+      <path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.2 3.8l-1.1 1.1M4.9 11.1l-1.1 1.1M12.2 12.2l-1.1-1.1M4.9 4.9 3.8 3.8" />
+    </svg>
+  );
+}
 
 export function Sidebar({
   collections,
   selectedRequestId,
   onSelectRequest,
   onImportFile,
+  onPasteCurl,
   onCreateCollection,
   onAddFolder,
   onAddRequest,
@@ -56,9 +79,22 @@ export function Sidebar({
   onRenameNode,
   onDeleteCollection,
   onDeleteNode,
+  environments,
+  activeEnvironmentId,
+  onSetActiveEnvironment,
+  onCreateEnvironment,
+  onRenameEnvironment,
+  onDeleteEnvironment,
+  onUpdateEnvironmentVariables,
+  globals,
+  onUpdateGlobals,
+  fileName,
+  onSaveFile,
+  onOpenFile,
 }: SidebarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [renaming, setRenaming] = useState<Renaming | null>(null);
+  const [showEnvironments, setShowEnvironments] = useState(false);
 
   const commitRename = () => {
     if (!renaming || !renaming.value.trim()) {
@@ -147,6 +183,8 @@ export function Sidebar({
     );
   }
 
+  const activeEnvironment = environments.find((e) => e.id === activeEnvironmentId);
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -170,6 +208,14 @@ export function Sidebar({
         <button className="import-btn" onClick={() => fileInputRef.current?.click()}>
           Import Postman
         </button>
+        <button className="import-btn" onClick={onPasteCurl}>
+          Paste cURL
+        </button>
+        <div className="file-row">
+          <button onClick={onSaveFile}>Save</button>
+          <button onClick={onOpenFile}>Open</button>
+        </div>
+        <div className={`file-status${fileName ? "" : " unsaved"}`}>{fileName ?? "Unsaved — not yet written to a file"}</div>
       </div>
       <input
         ref={fileInputRef}
@@ -225,6 +271,38 @@ export function Sidebar({
             );
           })}
         </div>
+      )}
+
+      <div className="env-picker">
+        <select value={activeEnvironmentId ?? ""} onChange={(e) => onSetActiveEnvironment(e.target.value || null)}>
+          <option value="">No Environment</option>
+          {environments.map((env) => (
+            <option key={env.id} value={env.id}>
+              {env.name}
+            </option>
+          ))}
+        </select>
+        <button title="Manage environments" onClick={() => setShowEnvironments(true)}>
+          <GearIcon />
+        </button>
+      </div>
+      {activeEnvironment && (
+        <div className="file-status">{activeEnvironment.variables.length} variable{activeEnvironment.variables.length === 1 ? "" : "s"}</div>
+      )}
+
+      {showEnvironments && (
+        <EnvironmentsModal
+          environments={environments}
+          activeEnvironmentId={activeEnvironmentId}
+          onClose={() => setShowEnvironments(false)}
+          onCreate={onCreateEnvironment}
+          onRename={onRenameEnvironment}
+          onDelete={onDeleteEnvironment}
+          onSetActive={onSetActiveEnvironment}
+          onUpdateVariables={onUpdateEnvironmentVariables}
+          globals={globals}
+          onUpdateGlobals={onUpdateGlobals}
+        />
       )}
     </aside>
   );
