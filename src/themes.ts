@@ -12,6 +12,8 @@ export const THEMES: ThemeOption[] = [
   { id: "nightshift", name: "Nightshift", swatch: "#5b8cff", isLight: false },
   { id: "sunbaked", name: "Sunbaked", swatch: "#f2994a", isLight: false },
   { id: "slate", name: "Slate", swatch: "#3fc1c9", isLight: false },
+  { id: "postman", name: "Postman", swatch: "#ff6c37", isLight: false },
+  { id: "vscode", name: "VS Code", swatch: "#007acc", isLight: false },
 ];
 
 const STORAGE_KEY = "satchel.theme";
