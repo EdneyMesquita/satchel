@@ -25,31 +25,45 @@ interface ResponseState {
 const METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 type Tab = "params" | "headers" | "body" | "auth";
 
-function buildHeaders(request: SatchelRequest): Headers {
+export function buildHeaders(request: SatchelRequest, variables: KeyValue[]): Headers {
   const headers = new Headers();
   for (const h of request.headers) {
-    if (h.enabled && h.key) headers.set(h.key, h.value);
+    if (h.enabled && h.key) headers.set(h.key, resolveVariables(h.value, variables));
   }
   const auth = request.auth;
-  if (auth.type === "bearer" && auth.token) headers.set("Authorization", `Bearer ${auth.token}`);
-  if (auth.type === "basic" && auth.username) headers.set("Authorization", `Basic ${btoa(`${auth.username}:${auth.password}`)}`);
-  if (auth.type === "apikey" && auth.in === "header" && auth.key) headers.set(auth.key, auth.value);
+  if (auth.type === "bearer" && auth.token) headers.set("Authorization", `Bearer ${resolveVariables(auth.token, variables)}`);
+  if (auth.type === "basic" && auth.username) {
+    const user = resolveVariables(auth.username, variables);
+    const pass = resolveVariables(auth.password, variables);
+    headers.set("Authorization", `Basic ${btoa(`${user}:${pass}`)}`);
+  }
+  if (auth.type === "apikey" && auth.in === "header" && auth.key) headers.set(auth.key, resolveVariables(auth.value, variables));
   return headers;
 }
 
-function buildUrl(request: SatchelRequest, variables: KeyValue[]): string {
+export function buildUrl(request: SatchelRequest, variables: KeyValue[]): string {
   const resolved = resolveVariables(request.url, variables);
   const url = new URL(resolved.startsWith("http") ? resolved : `https://${resolved}`);
   for (const p of request.params) {
     if (p.enabled && p.key) url.searchParams.set(p.key, resolveVariables(p.value, variables));
   }
   if (request.auth.type === "apikey" && request.auth.in === "query" && request.auth.key) {
-    url.searchParams.set(request.auth.key, request.auth.value);
+    url.searchParams.set(request.auth.key, resolveVariables(request.auth.value, variables));
   }
   return url.toString();
 }
 
-function AuthEditor({ auth, onChange }: { auth: AuthConfig; onChange: (auth: AuthConfig) => void }) {
+export function buildBody(request: SatchelRequest, variables: KeyValue[]): string | undefined {
+  if (request.body.mode === "raw") return resolveVariables(request.body.raw, variables);
+  if (request.body.mode === "urlencoded") {
+    return new URLSearchParams(
+      request.body.params.filter((p) => p.enabled).map((p) => [p.key, resolveVariables(p.value, variables)]),
+    ).toString();
+  }
+  return undefined;
+}
+
+function AuthEditor({ auth, onChange, variables }: { auth: AuthConfig; onChange: (auth: AuthConfig) => void; variables: KeyValue[] }) {
   return (
     <div className="panel">
       <select value={auth.type} onChange={(e) => onChange(authOfType(e.target.value as AuthConfig["type"]))}>
@@ -61,19 +75,22 @@ function AuthEditor({ auth, onChange }: { auth: AuthConfig; onChange: (auth: Aut
       {auth.type === "bearer" && (
         <div className="auth-row">
           <span className="field-label">Token</span>
-          <input style={{ flex: 1 }} value={auth.token} onChange={(e) => onChange({ ...auth, token: e.target.value })} />
+          <VariableInput className="auth-field" value={auth.token} variables={variables} onChange={(token) => onChange({ ...auth, token })} />
         </div>
       )}
       {auth.type === "basic" && (
         <div className="auth-row">
-          <input placeholder="Username" value={auth.username} onChange={(e) => onChange({ ...auth, username: e.target.value })} />
+          <VariableInput className="auth-field" placeholder="Username" value={auth.username} variables={variables} onChange={(username) => onChange({ ...auth, username })} />
+          {/* Plain input, not VariableInput: password masking relies on the native
+              field's own text being visible (as dots) — our overlay makes native
+              text transparent, which would unmask the value through the backdrop. */}
           <input placeholder="Password" type="password" value={auth.password} onChange={(e) => onChange({ ...auth, password: e.target.value })} />
         </div>
       )}
       {auth.type === "apikey" && (
         <div className="auth-row">
-          <input placeholder="Key" value={auth.key} onChange={(e) => onChange({ ...auth, key: e.target.value })} />
-          <input placeholder="Value" value={auth.value} onChange={(e) => onChange({ ...auth, value: e.target.value })} />
+          <VariableInput className="auth-field" placeholder="Key" value={auth.key} variables={variables} onChange={(key) => onChange({ ...auth, key })} />
+          <VariableInput className="auth-field" placeholder="Value" value={auth.value} variables={variables} onChange={(value) => onChange({ ...auth, value })} />
           <select value={auth.in} onChange={(e) => onChange({ ...auth, in: e.target.value as "header" | "query" })}>
             <option value="header">Header</option>
             <option value="query">Query Param</option>
@@ -183,14 +200,9 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
     const started = performance.now();
     try {
       const url = buildUrl(request, variables);
-      const headers = buildHeaders(request);
+      const headers = buildHeaders(request, variables);
       const hasBody = request.method !== "GET" && request.method !== "HEAD" && request.body.mode !== "none";
-      const body =
-        request.body.mode === "raw"
-          ? resolveVariables(request.body.raw, variables)
-          : request.body.mode === "urlencoded"
-            ? new URLSearchParams(request.body.params.filter((p) => p.enabled).map((p) => [p.key, p.value])).toString()
-            : undefined;
+      const body = buildBody(request, variables);
 
       const doFetch = isTauri() ? tauriFetch : window.fetch;
       const res = await doFetch(url, { method: request.method, headers, body: hasBody ? body : undefined });
@@ -251,7 +263,7 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
       {tab === "params" && <KvEditor rows={request.params} variables={variables} onChange={(params) => patch({ params })} />}
       {tab === "headers" && <KvEditor rows={request.headers} variables={variables} onChange={(headers) => patch({ headers })} />}
       {tab === "body" && <BodyEditor body={request.body} variables={variables} onChange={(body) => patch({ body })} />}
-      {tab === "auth" && <AuthEditor auth={request.auth} onChange={(auth) => patch({ auth })} />}
+      {tab === "auth" && <AuthEditor auth={request.auth} variables={variables} onChange={(auth) => patch({ auth })} />}
 
       {(response || error) && (
         <div className="response">
