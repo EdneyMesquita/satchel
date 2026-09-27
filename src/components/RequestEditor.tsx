@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AuthConfig, HttpMethod, KeyValue, RequestBody, SatchelRequest } from "../types";
-import { resolveVariables } from "../collectionTree";
 import { isTauri } from "../platform";
 import { parseCurl } from "../curl";
 import { KvEditor } from "./KvEditor";
 import { VariableInput, VariableTextarea } from "./VariableField";
 import { tokenizeJsonLike, JSON_TOKEN_CLASS } from "../jsonTokens";
+import { buildBody, buildHeaders, buildUrl } from "../requestBuilder";
+import { RateLimitTester } from "./RateLimitTester";
+
+export { buildBody, buildHeaders, buildUrl } from "../requestBuilder";
 
 interface RequestEditorProps {
   request: SatchelRequest;
@@ -25,7 +28,7 @@ interface ResponseState {
 }
 
 const METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
-type Tab = "params" | "headers" | "body" | "auth";
+type Tab = "params" | "headers" | "body" | "auth" | "ratelimit";
 type ResponseTab = "body" | "headers";
 
 function JsonView({ text, isJson }: { text: string; isJson: boolean }) {
@@ -39,44 +42,6 @@ function JsonView({ text, isJson }: { text: string; isJson: boolean }) {
       ))}
     </>
   );
-}
-
-export function buildHeaders(request: SatchelRequest, variables: KeyValue[]): Headers {
-  const headers = new Headers();
-  for (const h of request.headers) {
-    if (h.enabled && h.key) headers.set(h.key, resolveVariables(h.value, variables));
-  }
-  const auth = request.auth;
-  if (auth.type === "bearer" && auth.token) headers.set("Authorization", `Bearer ${resolveVariables(auth.token, variables)}`);
-  if (auth.type === "basic" && auth.username) {
-    const user = resolveVariables(auth.username, variables);
-    const pass = resolveVariables(auth.password, variables);
-    headers.set("Authorization", `Basic ${btoa(`${user}:${pass}`)}`);
-  }
-  if (auth.type === "apikey" && auth.in === "header" && auth.key) headers.set(auth.key, resolveVariables(auth.value, variables));
-  return headers;
-}
-
-export function buildUrl(request: SatchelRequest, variables: KeyValue[]): string {
-  const resolved = resolveVariables(request.url, variables);
-  const url = new URL(resolved.startsWith("http") ? resolved : `https://${resolved}`);
-  for (const p of request.params) {
-    if (p.enabled && p.key) url.searchParams.set(p.key, resolveVariables(p.value, variables));
-  }
-  if (request.auth.type === "apikey" && request.auth.in === "query" && request.auth.key) {
-    url.searchParams.set(request.auth.key, resolveVariables(request.auth.value, variables));
-  }
-  return url.toString();
-}
-
-export function buildBody(request: SatchelRequest, variables: KeyValue[]): string | undefined {
-  if (request.body.mode === "raw") return resolveVariables(request.body.raw, variables);
-  if (request.body.mode === "urlencoded") {
-    return new URLSearchParams(
-      request.body.params.filter((p) => p.enabled).map((p) => [p.key, resolveVariables(p.value, variables)]),
-    ).toString();
-  }
-  return undefined;
 }
 
 function AuthEditor({ auth, onChange, variables }: { auth: AuthConfig; onChange: (auth: AuthConfig) => void; variables: KeyValue[] }) {
@@ -280,6 +245,9 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
           <button className={`tab${tab === "auth" ? " active" : ""}`} onClick={() => setTab("auth")}>
             Auth
           </button>
+          <button className={`tab${tab === "ratelimit" ? " active" : ""}`} onClick={() => setTab("ratelimit")}>
+            Rate Limit
+          </button>
         </div>
       </div>
 
@@ -287,6 +255,7 @@ export function RequestEditor({ request, variables, onChange }: RequestEditorPro
       {tab === "headers" && <KvEditor rows={request.headers} variables={variables} onChange={(headers) => patch({ headers })} />}
       {tab === "body" && <BodyEditor body={request.body} variables={variables} onChange={(body) => patch({ body })} />}
       {tab === "auth" && <AuthEditor auth={request.auth} variables={variables} onChange={(auth) => patch({ auth })} />}
+      {tab === "ratelimit" && <RateLimitTester request={request} variables={variables} />}
 
       {(response || error) && (
         <div className="response">
