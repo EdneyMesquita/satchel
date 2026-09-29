@@ -16,15 +16,15 @@
     "clipboard-manager:allow-write-text",
     {
       "identifier": "fs:allow-read-text-file",
-      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }]
+      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }, { "path": "**/.satchel/.gitignore" }]
     },
     {
       "identifier": "fs:allow-write-text-file",
-      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }]
+      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }, { "path": "**/.satchel/.gitignore" }]
     },
     {
       "identifier": "fs:allow-exists",
-      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }]
+      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }, { "path": "**/.satchel/.gitignore" }]
     },
     {
       "identifier": "fs:allow-read-file",
@@ -36,15 +36,15 @@
     },
     {
       "identifier": "fs:allow-read-dir",
-      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }]
+      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }, { "path": "**/.satchel/.gitignore" }]
     },
     {
       "identifier": "fs:allow-mkdir",
-      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }]
+      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }, { "path": "**/.satchel/.gitignore" }]
     },
     {
       "identifier": "fs:allow-remove",
-      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }]
+      "allow": [{ "path": "**" }, { "path": "**/.satchel" }, { "path": "**/.satchel/**" }, { "path": "**/.satchel/.gitignore" }]
     },
     {
       "identifier": "fs:allow-watch",
