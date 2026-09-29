@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/state/theme";
 import { WorkspaceProvider, useWorkspace } from "@/state/workspace";
 import { SessionProvider, useSession, ENVIRONMENTS_TAB } from "@/state/session";
 import { UiProvider, useUi } from "@/state/ui";
+import { GitProvider } from "@/state/git";
 import { AppHeader } from "@/features/shell/AppHeader";
 import { AppFooter } from "@/features/shell/AppFooter";
 import { useGlobalShortcuts } from "@/features/shell/useGlobalShortcuts";
@@ -26,24 +27,26 @@ export default function App() {
       <WorkspaceProvider>
         <SessionProvider>
           <UiProvider>
-            <TooltipProvider delayDuration={300}>
-              <Shell />
-              <Toaster
-                position="bottom-right"
-                offset={{ bottom: 36, right: 14 }}
-                toastOptions={{
-                  unstyled: true,
-                  classNames: {
-                    // The mockup's toast: compact card, brass dot, optional underlined action.
-                    toast:
-                      "flex w-full max-w-[420px] items-center gap-2.5 rounded-lg bg-bg1 px-3 py-[9px] text-[12.5px] text-fg shadow-pop before:size-1.5 before:flex-none before:rounded-full before:bg-brass data-[type=error]:before:bg-err",
-                    icon: "hidden",
-                    actionButton: "ml-auto font-medium text-fg underline underline-offset-3",
-                    cancelButton: "text-fg3",
-                  },
-                }}
-              />
-            </TooltipProvider>
+            <GitProvider>
+              <TooltipProvider delayDuration={300}>
+                <Shell />
+                <Toaster
+                  position="bottom-right"
+                  offset={{ bottom: 36, right: 14 }}
+                  toastOptions={{
+                    unstyled: true,
+                    classNames: {
+                      // The mockup's toast: compact card, brass dot, optional underlined action.
+                      toast:
+                        "flex w-full max-w-[420px] items-center gap-2.5 rounded-lg bg-bg1 px-3 py-[9px] text-[12.5px] text-fg shadow-pop before:size-1.5 before:flex-none before:rounded-full before:bg-brass data-[type=error]:before:bg-err",
+                      icon: "hidden",
+                      actionButton: "ml-auto font-medium text-fg underline underline-offset-3",
+                      cancelButton: "text-fg3",
+                    },
+                  }}
+                />
+              </TooltipProvider>
+            </GitProvider>
           </UiProvider>
         </SessionProvider>
       </WorkspaceProvider>

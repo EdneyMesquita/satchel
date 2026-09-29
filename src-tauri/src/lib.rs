@@ -1,5 +1,7 @@
 use tauri::Manager;
 
+mod git;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -8,6 +10,17 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .invoke_handler(tauri::generate_handler![
+            git::git_version,
+            git::git_info,
+            git::git_status,
+            git::git_commit,
+            git::git_commit_merge,
+            git::git_fetch,
+            git::git_pull,
+            git::git_push,
+            git::git_init,
+        ])
         // Response windows are satellites of the main window: closing it quits the app.
         .on_window_event(|window, event| {
             if window.label() == "main" {

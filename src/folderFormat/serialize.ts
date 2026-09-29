@@ -1,4 +1,4 @@
-import type { AuthConfig, Collection, Environment, FormField, KeyValue, RequestBody, SatchelRequest, TreeNode, Workspace } from "@/types";
+import type { AuthConfig, Collection, Environment, FormField, HttpMethod, KeyValue, RequestBody, SatchelRequest, TreeNode, Workspace } from "@/types";
 import {
   COLLECTION_FILE,
   COLLECTIONS_DIR,
@@ -81,30 +81,35 @@ export function requestFile(r: SatchelRequest, root: string | null, local: Local
   return toJson(out);
 }
 
-function writeItems(items: readonly TreeNode[], dir: string, files: FileMap, root: string | null, local: LocalState): string[] {
+function writeItems(items: readonly TreeNode[], dir: string, trail: string[], w: Writer): string[] {
   const alloc = nameAllocator([COLLECTION_FILE, FOLDER_FILE]);
   const order: string[] = [];
   for (const node of items) {
     if (node.type === "folder") {
       const name = alloc(slugify(node.name));
-      const childOrder = writeItems(node.children, `${dir}/${name}`, files, root, local);
-      files.set(`${dir}/${name}/${FOLDER_FILE}`, toJson({ id: node.id, name: node.name, order: childOrder }));
+      const childOrder = writeItems(node.children, `${dir}/${name}`, [...trail, node.name], w);
+      const path = `${dir}/${name}/${FOLDER_FILE}`;
+      w.files.set(path, toJson({ id: node.id, name: node.name, order: childOrder }));
+      w.labels.set(path, { kind: "folder", id: node.id, trail: [...trail, node.name] });
       order.push(name);
     } else {
       const name = alloc(slugify(node.request.name), REQUEST_SUFFIX);
-      files.set(`${dir}/${name}`, requestFile(node.request, root, local));
+      const path = `${dir}/${name}`;
+      w.files.set(path, requestFile(node.request, w.root, w.local));
+      w.labels.set(path, { kind: "request", id: node.id, trail: [...trail, node.request.name], method: node.request.method });
       order.push(name);
     }
   }
   return order;
 }
 
-function writeCollection(c: Collection, dir: string, files: FileMap, root: string | null, local: LocalState) {
+function writeCollection(c: Collection, dir: string, w: Writer) {
   const secrets: Record<string, string> = {};
   const vars = variables(c.variables, secrets);
-  if (Object.keys(secrets).length) local.secrets.collections[c.id] = secrets;
-  const order = writeItems(c.items, dir, files, root, local);
-  files.set(`${dir}/${COLLECTION_FILE}`, toJson({ id: c.id, name: c.name, variables: vars, order }));
+  if (Object.keys(secrets).length) w.local.secrets.collections[c.id] = secrets;
+  const order = writeItems(c.items, dir, [c.name], w);
+  w.files.set(`${dir}/${COLLECTION_FILE}`, toJson({ id: c.id, name: c.name, variables: vars, order }));
+  w.labels.set(`${dir}/${COLLECTION_FILE}`, { kind: "collection", id: c.id, trail: [c.name] });
 }
 
 function environmentFile(e: Environment, local: LocalState): string {
@@ -116,19 +121,28 @@ function environmentFile(e: Environment, local: LocalState): string {
   return toJson(out);
 }
 
-/**
- * The whole workspace as files. `root` (the folder's absolute path) lets
- * form-data files inside the workspace be stored as relative paths.
- */
-export function workspaceToFiles(ws: Workspace, root: string | null = null): FileMap {
-  const files: FileMap = new Map();
-  const local = emptyLocalState();
+/** What a workspace file holds, in the app's own terms (for a git changes list). */
+export type FileLabel =
+  | { kind: "request"; id: string; trail: string[]; method: HttpMethod }
+  | { kind: "folder" | "collection" | "environment"; id: string; trail: string[] }
+  | { kind: "workspace"; trail: string[] };
+
+interface Writer {
+  files: FileMap;
+  labels: Map<string, FileLabel>;
+  root: string | null;
+  local: LocalState;
+}
+
+function write(ws: Workspace, root: string | null): Writer {
+  const w: Writer = { files: new Map(), labels: new Map(), root, local: emptyLocalState() };
+  const { files, local } = w;
   local.activeEnvironmentId = ws.activeEnvironmentId;
 
   const colAlloc = nameAllocator();
   const collectionOrder = ws.collections.map((c) => {
     const dir = colAlloc(slugify(c.name));
-    writeCollection(c, `${COLLECTIONS_DIR}/${dir}`, files, root, local);
+    writeCollection(c, `${COLLECTIONS_DIR}/${dir}`, w);
     return dir;
   });
 
@@ -136,6 +150,7 @@ export function workspaceToFiles(ws: Workspace, root: string | null = null): Fil
   const environmentOrder = ws.environments.map((e) => {
     const name = envAlloc(slugify(e.name), ".json");
     files.set(`${ENVIRONMENTS_DIR}/${name}`, environmentFile(e, local));
+    w.labels.set(`${ENVIRONMENTS_DIR}/${name}`, { kind: "environment", id: e.id, trail: [e.name] });
     return name;
   });
 
@@ -147,9 +162,23 @@ export function workspaceToFiles(ws: Workspace, root: string | null = null): Fil
     ROOT_FILE,
     toJson({ format: FORMAT_ID, version: FORMAT_VERSION, collections: collectionOrder, environments: environmentOrder, globals }),
   );
+  w.labels.set(ROOT_FILE, { kind: "workspace", trail: ["Workspace settings"] });
   files.set(LOCAL_FILE, toJson(local));
   files.set(LOCAL_GITIGNORE, "# Personal Satchel state (active environment, secrets). Never commit it.\n*\n");
-  return files;
+  return w;
+}
+
+/**
+ * The whole workspace as files. `root` (the folder's absolute path) lets
+ * form-data files inside the workspace be stored as relative paths.
+ */
+export function workspaceToFiles(ws: Workspace, root: string | null = null): FileMap {
+  return write(ws, root).files;
+}
+
+/** Which request, folder, collection or environment each workspace file holds. */
+export function workspaceFileLabels(ws: Workspace): Map<string, FileLabel> {
+  return write(ws, null).labels;
 }
 
 /** `path` relative to `root` with "/" separators, or null when it isn't inside it. */

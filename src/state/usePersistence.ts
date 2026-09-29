@@ -449,6 +449,8 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     saveAsFolder,
     closeWorkspace,
     reloadFromDisk,
+    /** Write pending edits now (e.g. before a git commit), and wait for any write in flight. */
+    flush,
     openFile,
     saveFileAs,
   };
