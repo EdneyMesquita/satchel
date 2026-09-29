@@ -6,6 +6,8 @@ import { VARIABLE_PATTERN } from "@/variableTokens";
 import { pathParamNames } from "@/url";
 import type { SatchelRequest } from "@/types";
 import { useWorkspace } from "./workspace";
+import { publishResponse } from "@/features/response/popout/transport";
+import { snapshotOf } from "@/features/response/popout/snapshot";
 
 /**
  * Runtime, per-window state that is NOT saved in the workspace file:
@@ -191,7 +193,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSending((s) => ({ ...s, [requestId]: true }));
       setResponseTabs((m) => (m[requestId] === "burst" ? { ...m, [requestId]: "body" } : m));
       sendRequest(loc.request, mergedVariables(ctx), controller.signal)
-        .then((response) => setResponses((r) => ({ ...r, [requestId]: { kind: "ok", response } })))
+        .then((response) => {
+          setResponses((r) => ({ ...r, [requestId]: { kind: "ok", response } }));
+          publishResponse(snapshotOf(loc.request, response));
+        })
         .catch((err) => {
           if (controller.signal.aborted) return;
           const message = err instanceof SendError || err instanceof Error ? err.message : "Request failed";
