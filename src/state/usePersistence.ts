@@ -20,6 +20,7 @@ import {
   storeSource,
   withoutRecent,
   withRecent,
+  withoutSecretValues,
   type RecentWrite,
   type WorkspaceSource,
 } from "./sources";
@@ -77,6 +78,14 @@ function store(key: string, w: Workspace) {
 
 const loadCache = () => loadStored(CACHE_KEY);
 
+/**
+ * The mirror is only a first-frame preview of the file or folder, which holds the real values
+ * (a folder keeps secrets in .satchel/local.json): secret values stay out of localStorage.
+ */
+function storeMirror(w: Workspace) {
+  store(MIRROR_KEY, withoutSecretValues(w));
+}
+
 /** What to show on the very first render, before the file or folder has been read. */
 export function initialWorkspace(): Workspace {
   return loadSource().kind === "cache" ? loadCache() : loadStored(MIRROR_KEY);
@@ -116,6 +125,11 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   const frozen = useRef(false);
   /** files our saves just wrote (content) or deleted (null), and when: the watcher's own echo */
   const recentWrites = useRef(new Map<string, RecentWrite>());
+  /**
+   * The file or folder has been read at least once. Until then the screen shows the mirror, which has no
+   * secret values: an edit made in that moment must not be saved over the real files.
+   */
+  const loaded = useRef(loadSource().kind === "cache");
   /** the workspace the autosave effect last handled (a re-run with the same one, e.g. StrictMode's, is a no-op) */
   const handled = useRef<Workspace | null>(null);
 
@@ -135,13 +149,14 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   /** Replace the in-memory workspace without writing it back. */
   const adopt = useCallback(
     (w: Workspace) => {
+      loaded.current = true;
       // The same object wouldn't re-render, and the skip would swallow the next edit's save instead.
       if (w !== workspaceRef.current) {
         skipNextSave.current = true;
         setWorkspace(w);
       }
       // Just loaded from the file or folder: what the next launch shows first. (The cache is where it came from.)
-      if (sourceRef.current.kind !== "cache") store(MIRROR_KEY, w);
+      if (sourceRef.current.kind !== "cache") storeMirror(w);
     },
     [setWorkspace],
   );
@@ -188,7 +203,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
           baseline.current = await saveWorkspaceFolder(s.root, w, before, protectedPaths.current);
           noteWrites(before, baseline.current);
         }
-        store(MIRROR_KEY, w);
+        storeMirror(w);
         setSaveState("saved");
       } catch (err) {
         setSaveState("error");
@@ -219,6 +234,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
       skipNextSave.current = false;
       return;
     }
+    if (!loaded.current) return; // the source's own content replaces this as soon as it's read
     if (sourceRef.current.kind !== "cache") setSaveState("saving");
     cancelPendingSave();
     saveTimer.current = setTimeout(() => {

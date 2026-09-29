@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { changedFiles, fileMapsEqual, ownEchoCandidates, folderName, loadRecents, loadSource, MAX_RECENTS, storeRecents, storeSource, withoutRecent, withRecent } from "./sources";
+import { changedFiles, fileMapsEqual, ownEchoCandidates, folderName, loadRecents, loadSource, MAX_RECENTS, storeRecents, storeSource, withoutRecent, withRecent, withoutSecretValues } from "./sources";
 
 // A minimal localStorage for the node test environment.
 const store = new Map<string, string>();
@@ -102,5 +102,23 @@ describe("ownEchoCandidates", () => {
     expect(ownEchoCandidates(["collections/billing"], recent, 2500, 2000)).toBeNull();
     expect(ownEchoCandidates(["satchel.json"], recent, 2500, 2000)).toBeNull(); // written 2.5 s ago
     expect(ownEchoCandidates([login], recent, 3500, 2000)).toBeNull();
+  });
+});
+
+describe("withoutSecretValues", () => {
+  it("blanks secret values in every scope and keeps the rest", () => {
+    const token = { key: "token", value: "s3cr3t", enabled: true, secret: true };
+    const host = { key: "host", value: "api.test", enabled: true };
+    const w = withoutSecretValues({
+      globals: [token, host],
+      collections: [{ id: "c", name: "C", variables: [token], items: [] }],
+      environments: [{ id: "e", name: "E", variables: [host, token] }],
+      activeEnvironmentId: "e",
+    });
+    expect(w.globals).toEqual([{ ...token, value: "" }, host]);
+    expect(w.collections[0].variables).toEqual([{ ...token, value: "" }]);
+    expect(w.environments[0].variables).toEqual([host, { ...token, value: "" }]);
+    expect(w.activeEnvironmentId).toBe("e");
+    expect(JSON.stringify(w)).not.toContain("s3cr3t");
   });
 });
