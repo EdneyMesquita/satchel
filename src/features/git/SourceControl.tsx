@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useGit } from "@/state/git";
 import { useUi } from "@/state/ui";
-import { useSession } from "@/state/session";
+import { useSessionCore } from "@/state/session";
 import { useWorkspace } from "@/state/workspace";
 import { ChangesList } from "./ChangesList";
 import { CommitBox, type CommitRun } from "./CommitBox";
@@ -23,7 +23,7 @@ export function SourceControl() {
   const ws = useWorkspace();
   const git = useGit();
   const ui = useUi();
-  const session = useSession();
+  const session = useSessionCore();
 
   // Kept here (not in the popover content) so a draft survives closing the panel.
   const [message, setMessage] = useState("");

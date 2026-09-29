@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -25,7 +25,7 @@ import type { HttpMethod, SatchelRequest, TreeNode } from "@/types";
 import { EnvDot } from "@/components/common/EnvDot";
 import { MOD } from "@/components/common/Kbd";
 import { useWorkspace } from "@/state/workspace";
-import { useSession, ENVIRONMENTS_TAB } from "@/state/session";
+import { useSessionCore, ENVIRONMENTS_TAB } from "@/state/session";
 import { useUi } from "@/state/ui";
 import { useAppActions } from "@/state/actions";
 import { useTheme } from "@/state/theme";
@@ -62,10 +62,10 @@ export function displayPath(url: string): string {
 
 const icon = (Icon: typeof Plus) => <Icon className="size-3.5" strokeWidth={2} />;
 
-/** Every request in the workspace plus the palette's commands, in display order. */
+/** Every request in the workspace plus the palette's commands, in display order. Only used while the palette is open. */
 export function usePaletteItems(): PaletteItem[] {
   const ws = useWorkspace();
-  const session = useSession();
+  const session = useSessionCore();
   const ui = useUi();
   const actions = useAppActions();
   const wsActions = useWorkspaceActions();
@@ -73,19 +73,27 @@ export function usePaletteItems(): PaletteItem[] {
   const { theme, toggleTheme } = useTheme();
   const git = useGit();
 
-  const requests: PaletteItem[] = ws.workspace.collections.flatMap((collection) =>
-    collectRequests(collection.items).map((request) => ({
-      id: `req:${request.id}`,
-      group: "Requests" as const,
-      label: request.name,
-      sub: `${collection.name} · ${displayPath(request.url)}`,
-      method: request.method,
-      run: (send: boolean) => {
-        session.openTab(request.id);
-        ui.setSidebarOpen(false);
-        if (send) session.send(request.id);
-      },
-    })),
+  // Thousands of requests: built once per change to the collections, not on every render.
+  const collections = ws.workspace.collections;
+  const { openTab, send } = session;
+  const { setSidebarOpen } = ui;
+  const requests = useMemo(
+    (): PaletteItem[] =>
+      collections.flatMap((collection) =>
+        collectRequests(collection.items).map((request) => ({
+          id: `req:${request.id}`,
+          group: "Requests" as const,
+          label: request.name,
+          sub: `${collection.name} · ${displayPath(request.url)}`,
+          method: request.method,
+          run: (sendNow: boolean) => {
+            openTab(request.id);
+            setSidebarOpen(false);
+            if (sendNow) send(request.id);
+          },
+        })),
+      ),
+    [collections, openTab, send, setSidebarOpen],
   );
 
   const active = session.activeTab;

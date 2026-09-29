@@ -22,3 +22,8 @@ export function useSuppressNativeContextMenu() {
     return () => window.removeEventListener("contextmenu", onContextMenu);
   }, []);
 }
+
+export function NativeContextMenuGuard() {
+  useSuppressNativeContextMenu();
+  return null;
+}

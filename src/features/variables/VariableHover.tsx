@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
 import { useWorkspace } from "@/state/workspace";
-import { useSession } from "@/state/session";
+import { useSessionCore } from "@/state/session";
 import { resolveVariable, mergedVariables, type VariableContext } from "@/variables";
 import { findVariable } from "@/variableTokens";
 import { cn } from "@/lib/utils";
@@ -204,7 +204,7 @@ function scopeLabel(label: string, scopeName: string) {
 
 function VariableCard({ requestId, name, onDone }: { requestId: string; name: string; onDone: () => void }) {
   const ws = useWorkspace();
-  const session = useSession();
+  const session = useSessionCore();
   const ctx: VariableContext = ws.variableContext(requestId);
   const res = resolveVariable(name, ctx);
   const env = ws.activeEnvironment;

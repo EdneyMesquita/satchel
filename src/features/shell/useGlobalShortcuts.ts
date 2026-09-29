@@ -1,13 +1,12 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/state/workspace";
-import { useSession, ENVIRONMENTS_TAB } from "@/state/session";
+import { useSessionCore, ENVIRONMENTS_TAB } from "@/state/session";
 import { useUi } from "@/state/ui";
 import { useAppActions } from "@/state/actions";
 import { useGit } from "@/state/git";
 import { useWorkspaceActions } from "@/features/workspace/useWorkspaceActions";
-import { looksLikeCurl } from "@/curl";
-
+import { looksLikeCurl } from "@/curlDetect";
 
 function dialogOpen(): boolean {
   return document.querySelector("[role=dialog][data-state=open]") !== null;
@@ -24,7 +23,7 @@ function isEditable(el: Element | null): boolean {
  */
 export function useGlobalShortcuts() {
   const ws = useWorkspace();
-  const session = useSession();
+  const session = useSessionCore();
   const ui = useUi();
   const actions = useAppActions();
   const wsActions = useWorkspaceActions();
@@ -107,7 +106,7 @@ export function useGlobalShortcuts() {
       // Inputs (the URL field in particular) handle their own paste.
       if (isEditable(document.activeElement)) return;
       e.preventDefault();
-      latest.current.actions.importCurlText(text);
+      void latest.current.actions.importCurlText(text);
     }
 
     document.addEventListener("keydown", onKeyDown);
@@ -117,4 +116,14 @@ export function useGlobalShortcuts() {
       document.removeEventListener("paste", onPaste);
     };
   }, []);
+}
+
+/**
+ * Mounts the shortcuts in a component of their own: they read git status, the
+ * workspace and the session, and re-rendering null on each change costs nothing
+ * where re-rendering the app shell would.
+ */
+export function GlobalShortcuts() {
+  useGlobalShortcuts();
+  return null;
 }

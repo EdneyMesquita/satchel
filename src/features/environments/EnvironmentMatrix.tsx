@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EnvDot } from "@/components/common/EnvDot";
 import { useWorkspace } from "@/state/workspace";
-import { useSession } from "@/state/session";
+import { useSessionCore } from "@/state/session";
 import { useUi } from "@/state/ui";
 import { useAppActions } from "@/state/actions";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,7 @@ const HEAD_CELL_CLASS = "sticky top-0 z-[2] h-11 border-t bg-bg0 font-sans text-
 /** The "Environments" tab: every variable × globals / collections / environments, edited in place. */
 export function EnvironmentMatrix() {
   const ws = useWorkspace();
-  const session = useSession();
+  const session = useSessionCore();
   const ui = useUi();
   const actions = useAppActions();
   const { workspace } = ws;

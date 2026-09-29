@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 /** Transient UI: which overlay is open. */
 
@@ -47,36 +47,60 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [folderSetup, setFolderSetup] = useState<{ root: string } | null>(null);
   const [sourceControlOpen, setSourceControlOpen] = useState(false);
 
-  const value: UiValue = {
-    paletteOpen,
-    setPaletteOpen,
-    environmentDialog,
-    openEnvironmentDialog: (s) => {
-      setPaletteOpen(false);
-      setEnvironmentDialog(s);
-    },
-    closeEnvironmentDialog: () => setEnvironmentDialog(null),
-    postmanDialog,
-    openPostmanDialog: (files = []) => {
-      setPaletteOpen(false);
-      setPostmanDialog({ files });
-    },
-    closePostmanDialog: () => setPostmanDialog(null),
-    forceFirstRun,
-    setForceFirstRun,
-    folderSetup,
-    setFolderSetup: (v) => {
-      if (v) setPaletteOpen(false);
-      setFolderSetup(v);
-    },
-    sourceControlOpen,
-    setSourceControlOpen: (v) => {
-      if (v) setPaletteOpen(false);
-      setSourceControlOpen(v);
-    },
-    sidebarOpen,
-    setSidebarOpen,
-  };
+  const openEnvironmentDialog = useCallback((s: EnvironmentDialogState) => {
+    setPaletteOpen(false);
+    setEnvironmentDialog(s);
+  }, []);
+  const closeEnvironmentDialog = useCallback(() => setEnvironmentDialog(null), []);
+  const openPostmanDialog = useCallback((files: File[] = []) => {
+    setPaletteOpen(false);
+    setPostmanDialog({ files });
+  }, []);
+  const closePostmanDialog = useCallback(() => setPostmanDialog(null), []);
+  const setFolderSetupAndClosePalette = useCallback((v: { root: string } | null) => {
+    if (v) setPaletteOpen(false);
+    setFolderSetup(v);
+  }, []);
+  const setSourceControlAndClosePalette = useCallback((v: boolean) => {
+    if (v) setPaletteOpen(false);
+    setSourceControlOpen(v);
+  }, []);
+
+  const value = useMemo<UiValue>(
+    () => ({
+      paletteOpen,
+      setPaletteOpen,
+      environmentDialog,
+      openEnvironmentDialog,
+      closeEnvironmentDialog,
+      postmanDialog,
+      openPostmanDialog,
+      closePostmanDialog,
+      forceFirstRun,
+      setForceFirstRun,
+      folderSetup,
+      setFolderSetup: setFolderSetupAndClosePalette,
+      sourceControlOpen,
+      setSourceControlOpen: setSourceControlAndClosePalette,
+      sidebarOpen,
+      setSidebarOpen,
+    }),
+    [
+      paletteOpen,
+      environmentDialog,
+      openEnvironmentDialog,
+      closeEnvironmentDialog,
+      postmanDialog,
+      openPostmanDialog,
+      closePostmanDialog,
+      forceFirstRun,
+      folderSetup,
+      setFolderSetupAndClosePalette,
+      sourceControlOpen,
+      setSourceControlAndClosePalette,
+      sidebarOpen,
+    ],
+  );
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>;
 }
 

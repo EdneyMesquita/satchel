@@ -1,5 +1,6 @@
 import { HTTP_METHODS, type AuthConfig, type FormField, type HttpMethod, type KeyValue, type RequestBody } from "./types";
 import { paramsFromUrl } from "./url";
+import { CURL_WORD, stripPrompt } from "./curlDetect";
 
 // Turns a pasted curl command into a request. Handles what people actually
 // paste: Chrome/Edge "Copy as cURL (bash)" ($'…' quoting, -b cookies,
@@ -31,22 +32,8 @@ export interface ParsedCurl {
   warnings: string[];
 }
 
-// ---------------------------------------------------------------------------
-// Recognizing a curl command
-
-const PROMPT = /^(?:\$|%|>|#|PS [^>\n]*>|[A-Za-z]:\\[^>\n]*>)[ \t]*/;
-const CURL_WORD = /^curl(?:\.exe)?(?=\s|$)/i;
-
-/** Leading whitespace and a shell prompt ("$ ", "% ", "C:\>", "PS C:\>") removed. */
-function stripPrompt(text: string): string {
-  const t = text.replace(/^\s+/, "");
-  return CURL_WORD.test(t) ? t : t.replace(PROMPT, "");
-}
-
-/** Whether pasted text is meant as a curl command ("curl …", "curl.exe …", "$ curl …"). */
-export function looksLikeCurl(text: string): boolean {
-  return CURL_WORD.test(stripPrompt(text));
-}
+// Recognizing a curl command lives in ./curlDetect (small, loaded up front for paste detection).
+export { looksLikeCurl } from "./curlDetect";
 
 // ---------------------------------------------------------------------------
 // Tokenizing: POSIX shells (bash/zsh) and Windows cmd.exe
