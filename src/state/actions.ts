@@ -4,7 +4,7 @@ import { useSession } from "./session";
 import { useUi } from "./ui";
 import { parseCurl, CurlParseError } from "@/curl";
 import { readClipboardText } from "@/clipboard";
-import { paramsFromUrl } from "@/url";
+import { describeParsedCurl, requestNameFromUrl, tabForParsedCurl } from "@/features/curl/summary";
 
 /** Cross-cutting user actions that touch more than one store. */
 export function useAppActions() {
@@ -46,21 +46,19 @@ export function useAppActions() {
       toast.error(err instanceof CurlParseError ? err.message : "Couldn't parse that as a curl command.");
       return false;
     }
-    const nice = parsed.url.replace(/^https?:\/\/[^/]+/, "").split("?")[0] || "/";
     const id = ws.addRequest(null, null, {
-      name: nice.length > 26 ? `${nice.slice(0, 26)}…` : nice,
+      name: requestNameFromUrl(parsed.url),
       method: parsed.method,
       url: parsed.url,
-      params: paramsFromUrl(parsed.url, []),
+      params: parsed.params,
       headers: parsed.headers,
       body: parsed.body,
       auth: parsed.auth,
     });
     ui.setForceFirstRun(false);
     session.openTab(id);
-    const parts = [parsed.method, `${parsed.headers.length} header${parsed.headers.length === 1 ? "" : "s"}`];
-    if (parsed.body.mode !== "none") parts.push(parsed.body.mode === "raw" ? "JSON body" : "form body");
-    toast(`Parsed cURL: ${parts.join(", ")}.`);
+    session.setRequestTab(id, tabForParsedCurl(parsed));
+    toast(`Parsed cURL: ${describeParsedCurl(parsed)}`, parsed.warnings.length ? { description: parsed.warnings.join(" ") } : undefined);
     return true;
   }
 

@@ -4,8 +4,10 @@ import type { HttpMethod, SatchelRequest } from "@/types";
 import { useWorkspace } from "@/state/workspace";
 import { useSession, unresolvedVariables } from "@/state/session";
 import { isResolved } from "@/variables";
-import { normalizeRequest, paramsFromUrl, pathParamNames } from "@/url";
-import { parseCurl } from "@/curl";
+import { paramsFromUrl, pathParamNames } from "@/url";
+import { CurlParseError, looksLikeCurl, parseCurl } from "@/curl";
+import { applyParsedCurl, describeParsedCurl, tabForParsedCurl } from "@/features/curl/summary";
+import { useCopyAsCurl } from "@/features/curl/useCopyAsCurl";
 import { VariableHoverLayer } from "@/features/variables/VariableHover";
 import { ResponsePane } from "@/features/response/ResponsePane";
 import { UrlBar } from "./UrlBar";
@@ -35,6 +37,7 @@ function focusEnd(el: HTMLInputElement | null | undefined) {
 export function RequestView({ requestId }: { requestId: string }) {
   const ws = useWorkspace();
   const session = useSession();
+  const copyAsCurl = useCopyAsCurl();
   const viewRef = useRef<HTMLDivElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
   const location = ws.findRequest(requestId);
@@ -99,30 +102,21 @@ export function RequestView({ requestId }: { requestId: string }) {
 
   const setMethod = (method: HttpMethod) => update((r) => ({ ...r, method }));
 
-  // Pasting a curl command into the URL replaces this request's method, URL, headers, body and auth.
+  // Pasting a curl command into the URL replaces this request's method, URL, params, headers, auth and
+  // body in one update (one undo step, one save), then shows the tab with the most of what came in.
   const pasteText = (text: string): boolean => {
-    if (!/^\s*curl\b/i.test(text)) return false;
+    if (!looksLikeCurl(text)) return false;
     let parsed;
     try {
       parsed = parseCurl(text);
-    } catch {
-      return false; // looked like curl but didn't parse: let the raw text land in the field
+    } catch (err) {
+      // Looked like curl but didn't parse: say why, and let the raw text land in the field.
+      toast.error(err instanceof CurlParseError ? err.message : "Couldn't read that curl command.");
+      return false;
     }
-    update((r) =>
-      normalizeRequest({
-        ...r,
-        method: parsed.method,
-        url: parsed.url,
-        params: paramsFromUrl(parsed.url, []),
-        pathVariables: {},
-        headers: parsed.headers,
-        body: parsed.body,
-        auth: parsed.auth,
-      }),
-    );
-    const parts = [parsed.method, `${parsed.headers.length} header${parsed.headers.length === 1 ? "" : "s"}`];
-    if (parsed.body.mode !== "none") parts.push(parsed.body.mode === "raw" ? "JSON body" : "form body");
-    toast(`Parsed cURL: ${parts.join(", ")}.`);
+    update((r) => applyParsedCurl(r, parsed));
+    session.setRequestTab(requestId, tabForParsedCurl(parsed));
+    toast(`Pasted cURL: ${describeParsedCurl(parsed)}`, parsed.warnings.length ? { description: parsed.warnings.join(" ") } : undefined);
     return true;
   };
 
@@ -139,6 +133,7 @@ export function RequestView({ requestId }: { requestId: string }) {
           onSend={() => send()}
           onCancel={cancel}
           onPasteText={pasteText}
+          onCopyCurl={(resolve) => copyAsCurl(requestId, { resolve })}
           inputRef={urlRef}
         />
         <ResolvedUrl url={request.url} pathVariables={request.pathVariables} context={context} />

@@ -6,8 +6,8 @@ import { useUi } from "@/state/ui";
 import { useAppActions } from "@/state/actions";
 import { useGit } from "@/state/git";
 import { useWorkspaceActions } from "@/features/workspace/useWorkspaceActions";
+import { looksLikeCurl } from "@/curl";
 
-const CURL = /^\s*curl\s/i;
 
 function dialogOpen(): boolean {
   return document.querySelector("[role=dialog][data-state=open]") !== null;
@@ -99,8 +99,10 @@ export function useGlobalShortcuts() {
     }
 
     function onPaste(e: ClipboardEvent) {
+      // The URL field (or another handler) already took this paste.
+      if (e.defaultPrevented) return;
       const text = e.clipboardData?.getData("text") ?? "";
-      if (!CURL.test(text)) return;
+      if (!looksLikeCurl(text)) return;
       if (dialogOpen() || latest.current.ui.paletteOpen) return;
       // Inputs (the URL field in particular) handle their own paste.
       if (isEditable(document.activeElement)) return;
