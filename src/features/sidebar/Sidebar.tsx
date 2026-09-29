@@ -66,7 +66,7 @@ export function Sidebar() {
       )}
     >
       <div className="flex items-center gap-1.5 p-2">
-        <label className="flex h-7 flex-1 items-center gap-[7px] rounded-md border border-line bg-bg1 px-[9px] text-fg3 focus-within:border-brass-line">
+        <label className="flex h-7 min-w-0 flex-1 items-center gap-[7px] rounded-md border border-line bg-bg1 px-[9px] text-fg3 focus-within:border-brass-line">
           <Search className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
           <input
             value={filter}
