@@ -4,6 +4,7 @@ import { useWorkspace } from "@/state/workspace";
 import { useSession, ENVIRONMENTS_TAB } from "@/state/session";
 import { useAppActions } from "@/state/actions";
 import { Tab } from "./Tab";
+import { TabContextMenu } from "./TabContextMenu";
 
 /** 36px strip of open tabs (requests + the Environments tab) with a trailing "+". */
 export function TabStrip() {
@@ -38,20 +39,18 @@ export function TabStrip() {
           const close = () => session.closeTab(id);
           const select = () => session.setActiveTab(id);
           if (id === ENVIRONMENTS_TAB) {
-            return <Tab key={id} id={id} label="Environments" active={id === active} onSelect={select} onClose={close} />;
+            return (
+              <TabContextMenu key={id} id={id}>
+                <Tab id={id} label="Environments" active={id === active} onSelect={select} onClose={close} />
+              </TabContextMenu>
+            );
           }
           const request = ws.findRequest(id)?.request;
           if (!request) return null;
           return (
-            <Tab
-              key={id}
-              id={id}
-              label={request.name}
-              method={request.method}
-              active={id === active}
-              onSelect={select}
-              onClose={close}
-            />
+            <TabContextMenu key={id} id={id}>
+              <Tab id={id} label={request.name} method={request.method} active={id === active} onSelect={select} onClose={close} />
+            </TabContextMenu>
           );
         })}
       </div>

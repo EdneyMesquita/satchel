@@ -8,6 +8,7 @@ import { GitProvider } from "@/state/git";
 import { AppHeader } from "@/features/shell/AppHeader";
 import { AppFooter } from "@/features/shell/AppFooter";
 import { useGlobalShortcuts } from "@/features/shell/useGlobalShortcuts";
+import { useSuppressNativeContextMenu } from "@/features/shell/useSuppressNativeContextMenu";
 import { Sidebar } from "@/features/sidebar/Sidebar";
 import { TabStrip } from "@/features/tabs/TabStrip";
 import { CommandPalette } from "@/features/palette/CommandPalette";
@@ -59,6 +60,7 @@ function Shell() {
   const session = useSession();
   const ui = useUi();
   useGlobalShortcuts();
+  useSuppressNativeContextMenu();
 
   const isEmpty = ws.workspace.collections.length === 0;
   const showFirstRun = ui.forceFirstRun || (isEmpty && session.tabs.length === 0);
@@ -67,7 +69,7 @@ function Shell() {
   return (
     <div className="grid h-screen grid-rows-[44px_minmax(0,1fr)_24px]">
       <AppHeader />
-      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] min-[820px]:grid-cols-[256px_minmax(0,1fr)]">
+      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] min-[820px]:grid-cols-[var(--sidebar-w,256px)_minmax(0,1fr)]">
         <Sidebar />
         <main className={cn("grid min-h-0 min-w-0 bg-bg1", !showFirstRun && "grid-rows-[36px_minmax(0,1fr)]")}>
           {showFirstRun ? (

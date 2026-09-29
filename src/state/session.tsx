@@ -53,6 +53,11 @@ interface SessionValue {
   activeTab: TabId | null;
   openTab: (id: TabId) => void;
   closeTab: (id: TabId) => void;
+  /** Close every tab except `id` (which becomes active). */
+  closeOtherTabs: (id: TabId) => void;
+  /** Close the tabs after `id` in the strip. */
+  closeTabsToRight: (id: TabId) => void;
+  closeAllTabs: () => void;
   setActiveTab: (id: TabId) => void;
 
   requestTab: (requestId: string, request?: SatchelRequest) => RequestTab;
@@ -171,6 +176,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [activeTab],
   );
 
+  const closeOtherTabs = useCallback((id: TabId) => {
+    setTabs((t) => (t.includes(id) ? [id] : t));
+    setActiveTabState(id);
+  }, []);
+
+  const closeTabsToRight = useCallback(
+    (id: TabId) => {
+      setTabs((t) => {
+        const i = t.indexOf(id);
+        if (i < 0) return t;
+        const next = t.slice(0, i + 1);
+        if (activeTab && !next.includes(activeTab)) setActiveTabState(id);
+        return next;
+      });
+    },
+    [activeTab],
+  );
+
+  const closeAllTabs = useCallback(() => {
+    setTabs([]);
+    setActiveTabState(null);
+  }, []);
+
   const send = useCallback(
     (requestId: string, opts?: { force?: boolean }) => {
       const loc = ws.findRequest(requestId);
@@ -255,6 +283,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     activeTab,
     openTab,
     closeTab,
+    closeOtherTabs,
+    closeTabsToRight,
+    closeAllTabs,
     setActiveTab: (id) => {
       setActiveTabState(id);
       setBlocker(null);

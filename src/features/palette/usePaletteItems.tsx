@@ -32,6 +32,7 @@ import { useTheme } from "@/state/theme";
 import { useGit } from "@/state/git";
 import { folderName } from "@/state/sources";
 import { useWorkspaceActions } from "@/features/workspace/useWorkspaceActions";
+import { useCopyAsCurl } from "@/features/curl/useCopyAsCurl";
 import { plural } from "@/features/git/model";
 import { requestCommitFocus, SOURCE_CONTROL_KBD } from "@/features/git/panelRequests";
 import type { Rankable } from "./rank";
@@ -68,6 +69,7 @@ export function usePaletteItems(): PaletteItem[] {
   const ui = useUi();
   const actions = useAppActions();
   const wsActions = useWorkspaceActions();
+  const copyAsCurl = useCopyAsCurl();
   const { theme, toggleTheme } = useTheme();
   const git = useGit();
 
@@ -152,6 +154,14 @@ export function usePaletteItems(): PaletteItem[] {
     command("curl", "Paste cURL from clipboard", "import", icon(SquareTerminal), () => void actions.pasteCurlFromClipboard()),
     command("new-request", "New request", `${MOD}N`, icon(Plus), () => actions.newRequest()),
     command("envs", "Edit environments & globals", "", icon(Layers), () => session.openEnvironments()),
+    ...(activeRequestId
+      ? [
+          command("copy-curl", "Copy request as cURL", "", icon(SquareTerminal), () => copyAsCurl(activeRequestId)),
+          command("copy-curl-raw", "Copy request as cURL with {{variables}}", "", icon(SquareTerminal), () =>
+            copyAsCurl(activeRequestId, { resolve: false }),
+          ),
+        ]
+      : []),
     command("burst", "Burst-test current request", "rate limit", icon(Zap), () => {
       if (activeRequestId) session.setRequestTab(activeRequestId, "rate");
       else toast("Open a request first, then burst-test it.");
