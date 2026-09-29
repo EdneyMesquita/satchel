@@ -91,6 +91,12 @@ src-tauri/                 Rust shell (Tauri config, plugin wiring)
 
 Early but functional. Working: creating and editing collections/folders/requests, Postman import, curl paste, environments + globals, sending requests (including form data and QUERY), viewing and searching the response, rate-limit bursts, save/open to a workspace file. Not yet built: request history, native GraphQL bodies, pre/post-request scripts.
 
+## Releases
+
+Pushing a tag matching `vX.Y.Z` (e.g. `v1.1.0`) triggers `.github/workflows/release.yml`, which builds installers for macOS (universal binary), Windows, and Linux and attaches them to a **draft** GitHub release for review before publishing. Builds are unsigned, so first launches will trip Gatekeeper (macOS) or SmartScreen (Windows) warnings until code signing is set up separately.
+
+For the Microsoft Store, `.github/workflows/microsoft-store.yml` builds an MSIX package that the Store signs itself, so it needs no certificate. Once set up, it submits each published release to the Store by itself. [docs/microsoft-store.md](docs/microsoft-store.md) walks through the one-time Partner Center setup and the first submission. The privacy policy the Store asks for is [PRIVACY.md](PRIVACY.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: see [SECURITY.md](SECURITY.md) — please don't file those as public issues.
