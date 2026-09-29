@@ -1,6 +1,7 @@
 use tauri::Manager;
 
 mod git;
+mod secrets;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,6 +22,9 @@ pub fn run() {
             git::git_pull,
             git::git_push,
             git::git_init,
+            secrets::secrets_get,
+            secrets::secrets_set,
+            secrets::secrets_delete,
         ])
         // Response windows are satellites of the main window: closing it quits the app.
         .on_window_event(|window, event| {

@@ -179,7 +179,11 @@ function ordered(listed: unknown, present: readonly string[]): string[] {
  * individual files are collected rather than thrown; only a missing or
  * unusable satchel.json (not a workspace at all) throws.
  */
-export function filesToWorkspace(files: FileMap, root: string | null = null): FolderLoad {
+/**
+ * `secrets`: the folder's secret values from the keychain; they win over any
+ * still kept in local.json by an older version.
+ */
+export function filesToWorkspace(files: FileMap, root: string | null = null, secrets?: LocalState["secrets"]): FolderLoad {
   const problems: Problem[] = [];
   const protectedPaths: string[] = [];
   const fail = (path: string, err: unknown, protect: string = path) => {
@@ -212,6 +216,15 @@ export function filesToWorkspace(files: FileMap, root: string | null = null): Fo
       // Personal state only: start fresh rather than refusing to open.
       problems.push({ path: LOCAL_FILE, message: `${err.message}; your active environment and secret values were reset`, severity: "warning" });
     }
+  }
+  if (secrets) {
+    const nested = (a: Record<string, Record<string, string>>, b: Record<string, Record<string, string>>) =>
+      Object.fromEntries([...new Set([...Object.keys(a), ...Object.keys(b)])].map((id) => [id, { ...a[id], ...b[id] }]));
+    local.secrets = {
+      globals: { ...local.secrets.globals, ...secrets.globals },
+      collections: nested(local.secrets.collections, secrets.collections),
+      environments: nested(local.secrets.environments, secrets.environments),
+    };
   }
 
   const paths = [...files.keys()];

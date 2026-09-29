@@ -5,10 +5,12 @@ import { toast } from "sonner";
 import type { Workspace } from "@/types";
 import { emptyWorkspace, parseWorkspace } from "@/workspace";
 import { basename, pickOpenLocation, pickSaveLocation, readWorkspaceFile, writeWorkspaceFile } from "@/fileStore";
-import { createWorkspaceFolder, filesMatch, openWorkspaceFolder, readManagedFiles, saveWorkspaceFolder } from "@/folderStore";
+import { createWorkspaceFolder, filesMatch, openWorkspaceFolder, readFolderSecrets, readManagedFiles, saveWorkspaceFolder, type FolderSecrets } from "@/folderStore";
 import { filesToWorkspace, isManagedPath, relativeInside, ROOT_FILE, WorkspaceFolderError, type FileMap, type Problem } from "@/folderFormat";
 import { isTauri } from "@/platform";
 import { errorMessage } from "@/lib/errors";
+import { APP_ACCOUNT, loadSecretValues, saveSecretValues } from "@/secrets/secretStore";
+import { hasSecretValues, secretValuesOf, withoutSecretValues, withSecretValues } from "@/secrets/values";
 import {
   changedFiles,
   fileMapsEqual,
@@ -20,7 +22,6 @@ import {
   storeSource,
   withoutRecent,
   withRecent,
-  withoutSecretValues,
   type RecentWrite,
   type WorkspaceSource,
 } from "./sources";
@@ -76,11 +77,29 @@ function store(key: string, w: Workspace) {
   }
 }
 
+/** The app's workspace as stored: localStorage holds it without secret values (they're in the keychain). */
 const loadCache = () => loadStored(CACHE_KEY);
+
+/** The app's workspace with its secret values from the keychain (as stored, when they can't be read). */
+async function loadCacheWithSecrets(): Promise<Workspace> {
+  const w = loadCache();
+  try {
+    const values = await loadSecretValues(APP_ACCOUNT);
+    return values ? withSecretValues(w, values) : w;
+  } catch {
+    return w;
+  }
+}
+
+/** The app's workspace: secret values to the keychain, the rest to localStorage. */
+async function storeCache(w: Workspace) {
+  store(CACHE_KEY, withoutSecretValues(w));
+  await saveSecretValues(APP_ACCOUNT, secretValuesOf(w));
+}
 
 /**
  * The mirror is only a first-frame preview of the file or folder, which holds the real values
- * (a folder keeps secrets in .satchel/local.json): secret values stay out of localStorage.
+ * (a folder's secrets are in the keychain): secret values stay out of localStorage.
  */
 function storeMirror(w: Workspace) {
   store(MIRROR_KEY, withoutSecretValues(w));
@@ -126,10 +145,10 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   /** files our saves just wrote (content) or deleted (null), and when: the watcher's own echo */
   const recentWrites = useRef(new Map<string, RecentWrite>());
   /**
-   * The file or folder has been read at least once. Until then the screen shows the mirror, which has no
-   * secret values: an edit made in that moment must not be saved over the real files.
+   * The source (and its secret values) has been read at least once. Until then the screen shows a
+   * stored copy without secret values: an edit made in that moment must not be saved over them.
    */
-  const loaded = useRef(loadSource().kind === "cache");
+  const loaded = useRef(false);
   /** the workspace the autosave effect last handled (a re-run with the same one, e.g. StrictMode's, is a no-op) */
   const handled = useRef<Workspace | null>(null);
 
@@ -169,8 +188,8 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   };
 
   const applyFolderLoad = useCallback(
-    (root: string, files: FileMap) => {
-      const load = filesToWorkspace(files, root);
+    (root: string, files: FileMap, secrets: FolderSecrets) => {
+      const load = filesToWorkspace(files, root, secrets.values);
       frozen.current = false;
       baseline.current = files;
       protectedPaths.current = load.protectedPaths;
@@ -190,7 +209,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   const writeNow = useCallback((w: Workspace): Promise<void> => {
     const run = async () => {
       const s = sourceRef.current;
-      if (s.kind === "cache") return store(CACHE_KEY, w);
+      if (s.kind === "cache") return storeCache(w).catch((err) => setError(message(err, "Couldn't save the secret values.")));
       busy.current = true;
       setSaveState("saving");
       try {
@@ -215,6 +234,19 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     saving.current = saving.current.then(run, run);
     return saving.current;
   }, []);
+
+  /** After a folder load: say what the keychain couldn't do, and move plain-text secrets into it. */
+  const settleSecrets = useCallback(
+    (secrets: FolderSecrets, w: Workspace) => {
+      if (secrets.error) {
+        setError(
+          `Couldn't read the secret values from the system keychain (${secrets.error}). They're left as they are there, and edits to them aren't saved; reopen the workspace to try again.`,
+        );
+      }
+      if (secrets.migrate) void writeNow(w);
+    },
+    [writeNow],
+  );
 
   /** Save whatever is pending right away (before switching to another workspace). */
   const flush = useCallback(async () => {
@@ -251,7 +283,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     const writePending = () => {
       if (!saveTimer.current || sourceRef.current.kind !== "cache") return;
       cancelPendingSave();
-      store(CACHE_KEY, workspaceRef.current);
+      void storeCache(workspaceRef.current);
     };
     window.addEventListener("pagehide", writePending);
     window.addEventListener("beforeunload", writePending);
@@ -279,8 +311,10 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     }
     reloadWanted.current = false;
     let files: FileMap;
+    let secrets: FolderSecrets;
     try {
       files = await readManagedFiles(s.root);
+      secrets = await readFolderSecrets(files); // remembered after the first read: no keychain round trip
     } catch (err) {
       setError(message(err, "Couldn't read the workspace folder."));
       return false;
@@ -298,7 +332,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     }
     try {
       cancelPendingSave(); // the disk wins over edits that weren't saved yet
-      applyFolderLoad(s.root, files);
+      settleSecrets(secrets, applyFolderLoad(s.root, files, secrets).workspace);
     } catch (err) {
       if (!(err instanceof WorkspaceFolderError)) throw err;
       freeze(`${err.message} Changes aren't saved until it's fixed.`);
@@ -306,7 +340,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     }
     setSaveState("saved");
     return true;
-  }, [applyFolderLoad]);
+  }, [applyFolderLoad, settleSecrets]);
 
   /**
    * Whether changed paths the watcher reported are only our own saves coming back: each one is a
@@ -368,27 +402,43 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   // Reopen what was open last time.
   useEffect(() => {
     const s = sourceRef.current;
-    if (s.kind === "file") {
+    if (s.kind === "cache") {
+      // localStorage has the workspace without its secret values: they come from the keychain.
+      // A cache saved before the keychain still holds them in plain text; saving moves them.
+      const inline = hasSecretValues(secretValuesOf(workspaceRef.current));
+      loadSecretValues(APP_ACCOUNT)
+        .then((values) => {
+          const w = values ? withSecretValues(workspaceRef.current, values) : workspaceRef.current;
+          adopt(w);
+          if (inline) void writeNow(w);
+        })
+        .catch((err) => {
+          adopt(workspaceRef.current);
+          setError(
+            `Couldn't read the secret values from the system keychain (${message(err, "unknown error")}). Edits to them aren't saved until it can be read.`,
+          );
+        });
+    } else if (s.kind === "file") {
       readWorkspaceFile(s.path)
         .then(adopt)
         .catch(() => {
           setSource({ kind: "cache" });
           setSaveState("cache");
           setError(`Couldn't reopen ${basename(s.path)}. It may have moved or been deleted, so your last cached copy is shown.`);
-          adopt(loadCache());
+          void loadCacheWithSecrets().then(adopt);
         });
     } else if (s.kind === "folder") {
       const giveUp = (why: string) => {
         setSource({ kind: "cache" });
         setSaveState("cache");
         setError(`Couldn't reopen ${folderName(s.root)}: ${why}. The app's own workspace is shown instead.`);
-        adopt(loadCache());
+        void loadCacheWithSecrets().then(adopt);
       };
       exists(s.root)
         .then(async (there) => {
           if (!there) return giveUp("the folder is gone (moved, renamed, or on a drive that isn't mounted)");
           const opened = await openWorkspaceFolder(s.root).catch((err) => err as Error);
-          if (!(opened instanceof Error)) return void applyFolderLoad(s.root, opened.files);
+          if (!(opened instanceof Error)) return settleSecrets(opened.secrets, applyFolderLoad(s.root, opened.files, opened.secrets).workspace);
           if (!(opened instanceof WorkspaceFolderError)) return giveUp(message(opened, "it couldn't be read"));
           // e.g. satchel.json mid-merge: stay on the folder, show the last copy, and wait for the fix (the watcher reloads).
           freeze(`${folderName(s.root)}: ${opened.message} Changes aren't saved until it's fixed.`);
@@ -408,7 +458,8 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
         const files = await readManagedFiles(picked);
         if (!files.has(ROOT_FILE)) return { status: "not-workspace", root: picked };
         await flush();
-        const load = filesToWorkspace(files, picked); // throws on an unusable satchel.json
+        const secrets = await readFolderSecrets(files);
+        const load = filesToWorkspace(files, picked, secrets.values); // throws on an unusable satchel.json
         setSource({ kind: "folder", root: picked });
         frozen.current = false;
         baseline.current = files;
@@ -416,6 +467,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
         setProblems(load.problems);
         adopt(load.workspace);
         setSaveState("saved");
+        settleSecrets(secrets, load.workspace);
         return { status: "opened", root: picked, problems: load.problems.length };
       } catch (err) {
         const msg = message(err, "Couldn't open that folder.");
@@ -423,7 +475,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
         return { status: "failed", message: msg };
       }
     },
-    [adopt, flush, setSource],
+    [adopt, flush, setSource, settleSecrets],
   );
 
   /** Make `root` a workspace folder holding `from` (the current workspace, or an empty one), and switch to it. */
@@ -465,11 +517,12 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   /** Stop using the folder or file; back to the app's scratch workspace. */
   const closeWorkspace = useCallback(async () => {
     await flush();
+    const w = await loadCacheWithSecrets();
     setSource({ kind: "cache" });
     baseline.current = new Map();
     protectedPaths.current = [];
     setProblems([]);
-    adopt(loadCache());
+    adopt(w);
     setSaveState("cache");
   }, [adopt, flush, setSource]);
 

@@ -3,11 +3,13 @@ import type { Workspace } from "./types";
 import {
   applyPlanToMap,
   COLLECTIONS_DIR,
+  detachSecrets,
   ENVIRONMENTS_DIR,
   filesToWorkspace,
   isManagedPath,
   LOCAL_FILE,
   LOCAL_GITIGNORE,
+  localVault,
   planWrite,
   ROOT_FILE,
   workspaceToFiles,
@@ -15,6 +17,8 @@ import {
   type FileMap,
   type FolderLoad,
 } from "./folderFormat";
+import { folderAccount, loadSecretValues, saveSecretValues } from "./secrets/secretStore";
+import type { SecretValues } from "./secrets/values";
 
 /**
  * Workspace folders on disk (desktop app only). The pure format lives in
@@ -109,15 +113,37 @@ export async function filesMatch(root: string, expected: ReadonlyMap<string, str
   return same.every(Boolean);
 }
 
+export interface FolderSecrets {
+  /** from the keychain; undefined when there are none or they couldn't be read */
+  values?: SecretValues;
+  /** why they couldn't be read (the keychain refused, say): saving leaves them alone */
+  error?: string;
+  /** local.json still holds values in plain text: save once to move them into the keychain */
+  migrate: boolean;
+}
+
+/** The folder's secret values, from the keychain account named in its local.json. */
+export async function readFolderSecrets(files: FileMap): Promise<FolderSecrets> {
+  const { id, inline } = localVault(files);
+  if (!id) return { migrate: inline };
+  try {
+    return { values: (await loadSecretValues(folderAccount(id))) ?? undefined, migrate: inline };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err), migrate: false };
+  }
+}
+
 export interface OpenedFolder extends FolderLoad {
   root: string;
   /** The managed files as they are on disk now: the baseline for the next save. */
   files: FileMap;
+  secrets: FolderSecrets;
 }
 
 export async function openWorkspaceFolder(root: string): Promise<OpenedFolder> {
   const files = await readManagedFiles(root);
-  return { root, files, ...filesToWorkspace(files, root) };
+  const secrets = await readFolderSecrets(files);
+  return { root, files, secrets, ...filesToWorkspace(files, root, secrets.values) };
 }
 
 async function removeIfEmpty(path: string) {
@@ -138,7 +164,11 @@ export async function saveWorkspaceFolder(
   current: FileMap,
   protectedPaths: readonly string[] = [],
 ): Promise<FileMap> {
-  const plan = planWrite(current, workspaceToFiles(workspace, root), protectedPaths);
+  // Secret values go to the keychain (before local.json stops holding them); local.json keeps the account id.
+  const id = localVault(current).id ?? crypto.randomUUID();
+  const { files, secrets } = detachSecrets(workspaceToFiles(workspace, root), id);
+  await saveSecretValues(folderAccount(id), secrets);
+  const plan = planWrite(current, files, protectedPaths);
   const limit = limiter(CONCURRENCY);
   const dirs = new Set(plan.writes.map(([rel]) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "")).filter(Boolean));
   for (const dir of dirs) await mkdir(join(root, dir), { recursive: true });

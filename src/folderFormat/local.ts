@@ -1,10 +1,16 @@
 /**
  * Per-person state kept in `.satchel/local.json` (never shared, never committed):
- * which environment is active, the values of secret variables, and paths of
- * form-data files that live outside the workspace folder.
+ * which environment is active, where the values of secret variables are kept,
+ * and paths of form-data files that live outside the workspace folder.
  */
 export interface LocalState {
   activeEnvironmentId: string | null;
+  /** The folder's account in the system keychain, which holds its secret values (see src/secrets/). */
+  vault?: string;
+  /**
+   * Values of secret variables. In memory, what the serializer collected; on disk only in
+   * folders saved before the keychain (they're moved into it on the next save).
+   */
   secrets: {
     globals: Record<string, string>;
     /** collection id → variable → value */
@@ -38,6 +44,7 @@ export function parseLocalState(json: unknown): LocalState {
   const secrets = isRecord(json.secrets) ? json.secrets : {};
   return {
     activeEnvironmentId: typeof json.activeEnvironmentId === "string" ? json.activeEnvironmentId : null,
+    ...(typeof json.vault === "string" && /^[\w-]{1,64}$/.test(json.vault) ? { vault: json.vault } : {}),
     secrets: {
       globals: stringMap(secrets.globals),
       collections: nestedStringMap(secrets.collections),

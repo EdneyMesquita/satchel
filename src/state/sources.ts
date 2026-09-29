@@ -1,5 +1,4 @@
 import { isManagedPath, type FileMap } from "@/folderFormat";
-import type { KeyValue, Workspace } from "@/types";
 
 /** Where the workspace lives: the app cache (nothing chosen yet), a legacy .json file, or a workspace folder. */
 export type WorkspaceSource = { kind: "cache" } | { kind: "file"; path: string } | { kind: "folder"; root: string };
@@ -117,20 +116,4 @@ export function ownEchoCandidates(
 /** Last path segment, for display ("~/code/shop-api" → "shop-api"). */
 export function folderName(root: string): string {
   return root.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || root;
-}
-
-const blankSecrets = (list: KeyValue[]): KeyValue[] =>
-  list.some((v) => v.secret && v.value) ? list.map((v) => (v.secret ? { ...v, value: "" } : v)) : list;
-
-/**
- * The workspace with the values of secret variables blanked, for the localStorage mirror:
- * the file or folder keeps the real values (a folder in .satchel/local.json).
- */
-export function withoutSecretValues(w: Workspace): Workspace {
-  return {
-    ...w,
-    globals: blankSecrets(w.globals),
-    collections: w.collections.map((c) => ({ ...c, variables: blankSecrets(c.variables) })),
-    environments: w.environments.map((e) => ({ ...e, variables: blankSecrets(e.variables) })),
-  };
 }

@@ -3,8 +3,10 @@ import type { TreeNode, Workspace } from "@/types";
 import { parseWorkspace } from "@/workspace";
 import {
   applyPlanToMap,
+  detachSecrets,
   filesToWorkspace,
   isManagedPath,
+  localVault,
   planWrite,
   relativeInside,
   slugify,
@@ -168,6 +170,20 @@ describe("filesToWorkspace", () => {
     expect(problems).toEqual([]);
     expect(protectedPaths).toEqual([]);
     expect(workspace).toEqual(sample());
+  });
+
+  it("detaches secrets for the keychain and takes them back from it, over any left in local.json", () => {
+    const { files, secrets } = detachSecrets(workspaceToFiles(sample(), ROOT), "vault-1");
+    expect(localVault(files)).toEqual({ id: "vault-1", inline: false });
+    expect(secrets.environments["e-local"]).toEqual({ token: "dev-token" });
+    expect(filesToWorkspace(files, ROOT, secrets).workspace).toEqual(sample());
+
+    // an older local.json still holding a value: the keychain's wins, and the file is flagged for migration
+    const legacy = workspaceToFiles(sample(), ROOT);
+    expect(localVault(legacy)).toEqual({ id: null, inline: true });
+    const fromKeychain = { ...secrets, environments: { "e-local": { token: "rotated" } } };
+    const env = filesToWorkspace(legacy, ROOT, fromKeychain).workspace.environments.find((e) => e.id === "e-local")!;
+    expect(env.variables.find((v) => v.key === "token")?.value).toBe("rotated");
   });
 
   it("converts a legacy single-file workspace", () => {

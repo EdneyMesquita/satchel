@@ -38,6 +38,7 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 }));
 
 const { createWorkspaceFolder, filesMatch, openWorkspaceFolder, readManagedFiles, saveWorkspaceFolder } = await import("./folderStore");
+const { readSecret } = await import("./secrets/vault");
 
 const ROOT = "/repo";
 const ws = (): Workspace => ({
@@ -147,3 +148,54 @@ describe("filesMatch", () => {
     expect(await filesMatch(ROOT, new Map([[login, null]]))).toBe(true);
   });
 });
+
+describe("secret values", () => {
+  const withSecret = (token = "s3cr3t"): Workspace => {
+    const w = ws();
+    w.environments[0].variables = [
+      { key: "token", value: token, enabled: true, secret: true },
+      { key: "host", value: "api.test", enabled: true },
+    ];
+    return w;
+  };
+  const localJson = () => JSON.parse(disk.get(`${ROOT}/.satchel/local.json`)!);
+
+  it("go to the keychain, not into any file of the folder", async () => {
+    await createWorkspaceFolder(ROOT, withSecret());
+    for (const content of disk.values()) expect(content).not.toContain("s3cr3t");
+    const local = localJson();
+    expect(local.vault).toMatch(/^[\w-]+$/);
+    expect(local.secrets).toBeUndefined();
+    expect(await readSecret(`workspace/${local.vault}`)).toContain("s3cr3t");
+
+    const opened = await openWorkspaceFolder(ROOT);
+    expect(opened.secrets).toEqual({ values: expect.anything(), migrate: false });
+    expect(opened.workspace).toEqual(withSecret());
+  });
+
+  it("keep their keychain account across saves", async () => {
+    const files = await createWorkspaceFolder(ROOT, withSecret());
+    const { vault } = localJson();
+    await saveWorkspaceFolder(ROOT, withSecret("rotated"), files);
+    expect(localJson().vault).toBe(vault);
+    expect(await readSecret(`workspace/${vault}`)).toContain("rotated");
+    expect((await openWorkspaceFolder(ROOT)).workspace).toEqual(withSecret("rotated"));
+  });
+
+  it("move out of a local.json written before the keychain", async () => {
+    await createWorkspaceFolder(ROOT, withSecret());
+    const legacy = { activeEnvironmentId: "e1", secrets: { globals: {}, collections: {}, environments: { e1: { token: "legacy" } } }, files: {} };
+    disk.set(`${ROOT}/.satchel/local.json`, JSON.stringify(legacy));
+
+    const opened = await openWorkspaceFolder(ROOT);
+    expect(opened.secrets.migrate).toBe(true);
+    expect(opened.workspace).toEqual(withSecret("legacy"));
+
+    await saveWorkspaceFolder(ROOT, opened.workspace, opened.files);
+    const local = localJson();
+    expect(local.secrets).toBeUndefined();
+    expect(await readSecret(`workspace/${local.vault}`)).toContain("legacy");
+    expect((await openWorkspaceFolder(ROOT)).secrets.migrate).toBe(false);
+  });
+});
+

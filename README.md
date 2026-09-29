@@ -38,7 +38,7 @@ environments/<name>.json             one environment per file
 ```
 
 - **Open or create one** with `⌘O` / `Ctrl+O` (or "Save as workspace folder…" to move what you have into one). Satchel only ever touches the files above; everything else in the folder is left alone.
-- **Secrets stay local.** Mark a variable secret (the lock in *Environments & globals*) and its values live in `.satchel/local.json` on your machine only; the shared files keep an empty value. The active environment is personal too, so switching environments never shows up in `git status`.
+- **Secrets stay local, in your system keychain.** Mark a variable secret (the lock in *Environments & globals*) and its values go to the macOS Keychain, the Windows Credential Manager or the Secret Service (GNOME Keyring, KWallet) on Linux; the shared files keep an empty value, and `.satchel/local.json` only names the keychain entry. Without a keychain, they go to a file in Satchel's data folder that only you can read. The active environment is personal too, so switching environments never shows up in `git status`.
 - **You decide when to sync.** Satchel saves to the folder as you edit, like any editor; it never commits, pulls or pushes on its own. The branch chip in the header opens *Source control*: the changed files by request name, a commit box (only the files you select are committed, even when the workspace is inside a bigger repository), and Pull / Push / Fetch. It runs your system `git`, so your SSH keys and credential manager apply, and it works with any host.
 - **Changes from outside reload.** A `git pull` or branch switch in a terminal reloads the workspace. A file with merge conflict markers is listed under "files need attention" and left untouched until you resolve it.
 
