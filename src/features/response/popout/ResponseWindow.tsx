@@ -137,7 +137,7 @@ function ResponseWindow({ id }: { id: string }) {
           <div className="h-full overflow-auto">
             <HeadersTable headers={snapshot.headers} />
           </div>
-        ) : snapshot.bodyText === "" ? (
+        ) : snapshot.rawBodyText === "" ? (
           <div className="px-3 py-3.5 text-[12.5px] text-fg3">
             {snapshot.status} {snapshot.statusText}. The response has no body.
           </div>
@@ -145,7 +145,6 @@ function ResponseWindow({ id }: { id: string }) {
           <ResponseViewer
             key={snapshot.receivedAt}
             variant="window"
-            bodyText={snapshot.bodyText}
             rawText={snapshot.rawBodyText}
             isJson={snapshot.isJson}
           />
