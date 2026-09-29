@@ -23,38 +23,90 @@ import {
 
 /** Deeper than any real collection; stops a symlink loop or a runaway tree. */
 const MAX_DEPTH = 24;
+/** File operations in flight at once: enough to hide the IPC round trips, few enough not to flood them. */
+const CONCURRENCY = 16;
 
 const join = (root: string, rel: string) => `${root.replace(/[\\/]+$/, "")}/${rel}`;
 
-async function walk(root: string, rel: string, depth: number, out: FileMap): Promise<void> {
-  if (depth > MAX_DEPTH) return;
+/** Runs the tasks given to it at most `limit` at a time, in the order they came. */
+function limiter(limit: number) {
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  return async <T>(task: () => Promise<T>): Promise<T> => {
+    if (active < limit) active++;
+    else await new Promise<void>((resolve) => waiting.push(resolve)); // a finishing task hands its slot over
+    try {
+      return await task();
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else active--;
+    }
+  };
+}
+
+type Limit = ReturnType<typeof limiter>;
+
+/** The managed files under `rel`, read concurrently but listed in directory order. */
+async function walk(root: string, rel: string, depth: number, limit: Limit): Promise<[string, string][]> {
+  if (depth > MAX_DEPTH) return [];
   let entries;
   try {
-    entries = await readDir(join(root, rel));
+    entries = await limit(() => readDir(join(root, rel)));
   } catch {
-    return; // the directory doesn't exist (yet) — nothing to read
+    return []; // the directory doesn't exist (yet) — nothing to read
   }
-  for (const e of entries) {
-    if (e.isSymlink || e.name.startsWith(".")) continue;
-    const path = `${rel}/${e.name}`;
-    if (e.isDirectory) await walk(root, path, depth + 1, out);
-    else if (e.isFile && isManagedPath(path)) out.set(path, await readTextFile(join(root, path)));
+  const found = await Promise.all(
+    entries.map(async (e): Promise<[string, string][]> => {
+      if (e.isSymlink || e.name.startsWith(".")) return [];
+      const path = `${rel}/${e.name}`;
+      if (e.isDirectory) return walk(root, path, depth + 1, limit);
+      if (e.isFile && isManagedPath(path)) return [[path, await limit(() => readTextFile(join(root, path)))]];
+      return [];
+    }),
+  );
+  return found.flat();
+}
+
+/** A file's content, or null when it's absent or unreadable. */
+async function readIfThere(path: string): Promise<string | null> {
+  try {
+    return (await exists(path)) ? await readTextFile(path) : null;
+  } catch {
+    return null;
   }
 }
 
 /** Every file the format owns under `root`, as relative path → content. */
 export async function readManagedFiles(root: string): Promise<FileMap> {
+  const limit = limiter(CONCURRENCY);
+  const tops = [ROOT_FILE, LOCAL_FILE, LOCAL_GITIGNORE];
+  const [contents, collections, environments] = await Promise.all([
+    Promise.all(tops.map((rel) => limit(() => readIfThere(join(root, rel))))),
+    walk(root, COLLECTIONS_DIR, 0, limit),
+    walk(root, ENVIRONMENTS_DIR, 0, limit),
+  ]);
   const files: FileMap = new Map();
-  for (const rel of [ROOT_FILE, LOCAL_FILE, LOCAL_GITIGNORE]) {
-    try {
-      if (await exists(join(root, rel))) files.set(rel, await readTextFile(join(root, rel)));
-    } catch {
-      // unreadable: treated as absent
-    }
+  for (const [i, rel] of tops.entries()) {
+    const content = contents[i];
+    if (content !== null) files.set(rel, content); // absent or unreadable: left out
   }
-  await walk(root, COLLECTIONS_DIR, 0, files);
-  await walk(root, ENVIRONMENTS_DIR, 0, files);
+  for (const [rel, content] of [...collections, ...environments]) files.set(rel, content);
   return files;
+}
+
+/**
+ * Whether each of these files is on disk with exactly this content (null: absent),
+ * reading only them. Lets the folder watcher recognise our own writes coming back.
+ */
+export async function filesMatch(root: string, expected: ReadonlyMap<string, string | null>): Promise<boolean> {
+  const limit = limiter(CONCURRENCY);
+  const same = await Promise.all(
+    [...expected].map(([rel, content]) =>
+      limit(() => readTextFile(join(root, rel)).then((s): string | null => s, () => null)).then((s) => s === content),
+    ),
+  );
+  return same.every(Boolean);
 }
 
 export interface OpenedFolder extends FolderLoad {
@@ -87,22 +139,22 @@ export async function saveWorkspaceFolder(
   protectedPaths: readonly string[] = [],
 ): Promise<FileMap> {
   const plan = planWrite(current, workspaceToFiles(workspace, root), protectedPaths);
-  const made = new Set<string>();
-  for (const [rel, content] of plan.writes) {
-    const dir = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
-    if (dir && !made.has(dir)) {
-      await mkdir(join(root, dir), { recursive: true });
-      made.add(dir);
-    }
-    await writeTextFile(join(root, rel), content);
-  }
-  for (const rel of plan.deletes) {
-    try {
-      await remove(join(root, rel));
-    } catch {
-      // already gone (e.g. deleted by hand) — the goal is reached
-    }
-  }
+  const limit = limiter(CONCURRENCY);
+  const dirs = new Set(plan.writes.map(([rel]) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "")).filter(Boolean));
+  for (const dir of dirs) await mkdir(join(root, dir), { recursive: true });
+  await Promise.all(plan.writes.map(([rel, content]) => limit(() => writeTextFile(join(root, rel), content))));
+  await Promise.all(
+    plan.deletes.map((rel) =>
+      limit(async () => {
+        try {
+          await remove(join(root, rel));
+        } catch {
+          // already gone (e.g. deleted by hand) — the goal is reached
+        }
+      }),
+    ),
+  );
+  // One at a time, deepest first: a parent is only empty once its children are gone.
   for (const dir of plan.pruneDirs) await removeIfEmpty(join(root, dir));
   return applyPlanToMap(current, plan);
 }

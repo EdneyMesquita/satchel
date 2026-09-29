@@ -1,4 +1,4 @@
-import type { FileMap } from "@/folderFormat";
+import { isManagedPath, type FileMap } from "@/folderFormat";
 
 /** Where the workspace lives: the app cache (nothing chosen yet), a legacy .json file, or a workspace folder. */
 export type WorkspaceSource = { kind: "cache" } | { kind: "file"; path: string } | { kind: "folder"; root: string };
@@ -74,6 +74,43 @@ export function fileMapsEqual(a: FileMap, b: FileMap): boolean {
   if (a.size !== b.size) return false;
   for (const [k, v] of a) if (b.get(k) !== v) return false;
   return true;
+}
+
+/** What changed from `before` to `after`: each path's new content, or null when it's gone. */
+export function changedFiles(before: FileMap, after: FileMap): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  for (const [k, v] of after) if (before.get(k) !== v) out.set(k, v);
+  for (const k of before.keys()) if (!after.has(k)) out.set(k, null);
+  return out;
+}
+
+/** A file one of our saves wrote (its content) or deleted (null), and when. */
+export interface RecentWrite {
+  content: string | null;
+  at: number;
+}
+
+/**
+ * Whether the paths a folder watcher reported can be our own recent writes coming back: each is
+ * a file written within `windowMs` of `now`, or a directory with such a file inside (one we created
+ * or emptied). Returns the files to compare with the disk to be sure, or null when some change
+ * isn't ours.
+ */
+export function ownEchoCandidates(
+  paths: Iterable<string>,
+  recent: ReadonlyMap<string, RecentWrite>,
+  now: number,
+  windowMs: number,
+): Map<string, string | null> | null {
+  const fresh = [...recent].filter(([, w]) => now - w.at <= windowMs);
+  const ours = new Map(fresh.map(([rel, w]) => [rel, w.content]));
+  const expected = new Map<string, string | null>();
+  for (const rel of paths) {
+    const content = ours.get(rel);
+    if (content !== undefined) expected.set(rel, content);
+    else if (isManagedPath(rel) || !fresh.some(([p]) => p.startsWith(`${rel}/`))) return null;
+  }
+  return expected;
 }
 
 /** Last path segment, for display ("~/code/shop-api" → "shop-api"). */

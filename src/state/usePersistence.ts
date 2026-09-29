@@ -1,23 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { exists, watch } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import type { Workspace } from "@/types";
 import { emptyWorkspace, parseWorkspace } from "@/workspace";
 import { basename, pickOpenLocation, pickSaveLocation, readWorkspaceFile, writeWorkspaceFile } from "@/fileStore";
-import { createWorkspaceFolder, openWorkspaceFolder, readManagedFiles, saveWorkspaceFolder } from "@/folderStore";
+import { createWorkspaceFolder, filesMatch, openWorkspaceFolder, readManagedFiles, saveWorkspaceFolder } from "@/folderStore";
 import { filesToWorkspace, isManagedPath, relativeInside, ROOT_FILE, WorkspaceFolderError, type FileMap, type Problem } from "@/folderFormat";
 import { isTauri } from "@/platform";
 import { errorMessage } from "@/lib/errors";
 import {
+  changedFiles,
   fileMapsEqual,
   folderName,
   loadRecents,
   loadSource,
+  ownEchoCandidates,
   storeRecents,
   storeSource,
   withoutRecent,
   withRecent,
+  type RecentWrite,
   type WorkspaceSource,
 } from "./sources";
 
@@ -30,14 +33,21 @@ import {
  * Saving is automatic and debounced (it is not git sync: nothing is committed
  * or pushed). A folder is watched, so a `git pull` or a branch switch in a
  * terminal reloads the workspace; changes on disk win over unsaved ones.
+ * The watcher tells our own writes coming back from outside changes, so an
+ * autosave doesn't re-read the whole folder.
  */
 
 /** The app's scratch workspace, used while no file or folder is chosen. */
 const CACHE_KEY = "satchel.workspace.cache";
-/** A copy of the last opened file/folder, shown while it (re)loads so tabs and the tree don't flash empty. */
+/**
+ * A copy of the last opened file/folder as last loaded or saved, shown while it
+ * (re)loads so tabs and the tree don't flash empty.
+ */
 const MIRROR_KEY = "satchel.workspace.mirror";
 const SAVE_DELAY = 400;
 const RELOAD_DELAY = 250;
+/** How long after a save the watcher takes events on the files it wrote for our own echo. */
+const ECHO_WINDOW = 2000;
 
 export type SaveState = "saved" | "saving" | "cache" | "error";
 
@@ -104,6 +114,10 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   const reloadWanted = useRef(false);
   /** set when the folder stopped being a workspace (e.g. a branch without satchel.json): never write into it */
   const frozen = useRef(false);
+  /** files our saves just wrote (content) or deleted (null), and when: the watcher's own echo */
+  const recentWrites = useRef(new Map<string, RecentWrite>());
+  /** the workspace the autosave effect last handled (a re-run with the same one, e.g. StrictMode's, is a no-op) */
+  const handled = useRef<Workspace | null>(null);
 
   const setSource = useCallback((s: WorkspaceSource) => {
     storeSource(s);
@@ -121,11 +135,23 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   /** Replace the in-memory workspace without writing it back. */
   const adopt = useCallback(
     (w: Workspace) => {
-      skipNextSave.current = true;
-      setWorkspace(w);
+      // The same object wouldn't re-render, and the skip would swallow the next edit's save instead.
+      if (w !== workspaceRef.current) {
+        skipNextSave.current = true;
+        setWorkspace(w);
+      }
+      // Just loaded from the file or folder: what the next launch shows first. (The cache is where it came from.)
+      if (sourceRef.current.kind !== "cache") store(MIRROR_KEY, w);
     },
     [setWorkspace],
   );
+
+  const noteWrites = (before: FileMap, after: FileMap) => {
+    const now = Date.now();
+    const recent = recentWrites.current;
+    for (const [rel, w] of recent) if (now - w.at > ECHO_WINDOW) recent.delete(rel);
+    for (const [rel, content] of changedFiles(before, after)) recent.set(rel, { content, at: now });
+  };
 
   const applyFolderLoad = useCallback(
     (root: string, files: FileMap) => {
@@ -149,7 +175,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
   const writeNow = useCallback((w: Workspace): Promise<void> => {
     const run = async () => {
       const s = sourceRef.current;
-      if (s.kind === "cache") return;
+      if (s.kind === "cache") return store(CACHE_KEY, w);
       busy.current = true;
       setSaveState("saving");
       try {
@@ -157,7 +183,12 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
         else if (frozen.current) {
           setSaveState("error");
           return;
-        } else baseline.current = await saveWorkspaceFolder(s.root, w, baseline.current, protectedPaths.current);
+        } else {
+          const before = baseline.current;
+          baseline.current = await saveWorkspaceFolder(s.root, w, before, protectedPaths.current);
+          noteWrites(before, baseline.current);
+        }
+        store(MIRROR_KEY, w);
         setSaveState("saved");
       } catch (err) {
         setSaveState("error");
@@ -180,15 +211,15 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     }
   }, [writeNow]);
 
-  // Autosave: cache in the app until a file or folder is chosen; debounce-write to it after.
+  // Autosave, debounced: into the app cache until a file or folder is chosen, into that after.
   useEffect(() => {
-    store(sourceRef.current.kind === "cache" ? CACHE_KEY : MIRROR_KEY, workspace);
+    if (handled.current === workspace) return;
+    handled.current = workspace;
     if (skipNextSave.current) {
       skipNextSave.current = false;
       return;
     }
-    if (sourceRef.current.kind === "cache") return;
-    setSaveState("saving");
+    if (sourceRef.current.kind !== "cache") setSaveState("saving");
     cancelPendingSave();
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
@@ -198,6 +229,21 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     }, SAVE_DELAY);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadFromDisk is stable in practice
   }, [workspace, writeNow]);
+
+  // An edit still waiting for the cache's debounce isn't lost when the app closes or reloads.
+  useEffect(() => {
+    const writePending = () => {
+      if (!saveTimer.current || sourceRef.current.kind !== "cache") return;
+      cancelPendingSave();
+      store(CACHE_KEY, workspaceRef.current);
+    };
+    window.addEventListener("pagehide", writePending);
+    window.addEventListener("beforeunload", writePending);
+    return () => {
+      window.removeEventListener("pagehide", writePending);
+      window.removeEventListener("beforeunload", writePending);
+    };
+  }, []);
 
   /** Stop writing into the folder (it isn't a usable workspace right now) and say why. */
   const freeze = (why: string) => {
@@ -246,6 +292,17 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     return true;
   }, [applyFolderLoad]);
 
+  /**
+   * Whether changed paths the watcher reported are only our own saves coming back: each one is a
+   * file we wrote or deleted moments ago that is still as we left it, or a directory we wrote into.
+   */
+  const isOwnEcho = useCallback(async (root: string, paths: ReadonlySet<string>): Promise<boolean> => {
+    await saving.current; // a write in flight is noted once it's done
+    if (frozen.current) return false; // the reload decides when saving can resume
+    const expected = ownEchoCandidates(paths, recentWrites.current, Date.now(), ECHO_WINDOW);
+    return expected !== null && filesMatch(root, expected);
+  }, []);
+
   // Watch the open folder for changes made outside the app (git pull, checkout, an editor).
   useEffect(() => {
     if (source.kind !== "folder" || !isTauri()) return;
@@ -253,19 +310,29 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     let stop: (() => void) | null = null;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    /** relevant paths reported since the last check */
+    let changed = new Set<string>();
     watch(
       root,
       (event) => {
-        const relevant = event.paths.some((p) => {
+        // Opening and reading files (our own reloads, git status) changes nothing.
+        if (typeof event.type === "object" && "access" in event.type) return;
+        for (const p of event.paths) {
           const rel = relativeInside(root, p);
-          return rel !== null && !rel.startsWith(".git/") && (isManagedPath(rel) || rel === "collections" || rel.startsWith("collections/") || rel.startsWith("environments"));
-        });
-        if (!relevant) return;
+          if (rel !== null && !rel.startsWith(".git/") && (isManagedPath(rel) || rel === "collections" || rel.startsWith("collections/") || rel.startsWith("environments"))) {
+            changed.add(rel);
+          }
+        }
+        if (changed.size === 0) return;
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
-          void reloadFromDisk().then((changed) => {
-            if (changed) toast("Workspace reloaded: files changed on disk.");
-          });
+          const paths = changed;
+          changed = new Set();
+          void (async () => {
+            if (await isOwnEcho(root, paths)) return;
+            if (cancelled) return;
+            if (await reloadFromDisk()) toast("Workspace reloaded: files changed on disk.");
+          })();
         }, RELOAD_DELAY);
       },
       { recursive: true, delayMs: 200 },
@@ -280,7 +347,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
       if (timer) clearTimeout(timer);
       stop?.();
     };
-  }, [source, reloadFromDisk]);
+  }, [source, reloadFromDisk, isOwnEcho]);
 
   // Reopen what was open last time.
   useEffect(() => {
@@ -354,6 +421,7 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
         setSource({ kind: "folder", root });
         frozen.current = false;
         baseline.current = files;
+        noteWrites(new Map(), files);
         protectedPaths.current = [];
         setProblems([]);
         adopt(w);
@@ -428,30 +496,49 @@ export function usePersistence(workspace: Workspace, setWorkspace: (w: Workspace
     }
   }, [flush, setSource, writeNow]);
 
-  const name = source.kind === "folder" ? folderName(source.root) : source.kind === "file" ? basename(source.path) : null;
-  const path = source.kind === "folder" ? source.root : source.kind === "file" ? source.path : null;
+  const clearError = useCallback(() => setError(null), []);
 
-  return {
-    source,
-    /** folder name or file name; null for the app cache */
-    sourceName: name,
-    /** folder root or file path; null for the app cache */
-    sourcePath: path,
-    saveState,
-    error,
-    clearError: () => setError(null),
-    /** files in the folder that couldn't be loaded (conflicts, invalid JSON) or were fixed up */
-    problems,
-    recentFolders,
-    forgetRecent,
-    openFolder,
-    createFolderWorkspace,
-    saveAsFolder,
-    closeWorkspace,
-    reloadFromDisk,
-    /** Write pending edits now (e.g. before a git commit), and wait for any write in flight. */
-    flush,
-    openFile,
-    saveFileAs,
-  };
+  // One object per change of what's in it, so the workspace context stays stable between edits.
+  return useMemo(
+    () => ({
+      source,
+      /** folder name or file name; null for the app cache */
+      sourceName: source.kind === "folder" ? folderName(source.root) : source.kind === "file" ? basename(source.path) : null,
+      /** folder root or file path; null for the app cache */
+      sourcePath: source.kind === "folder" ? source.root : source.kind === "file" ? source.path : null,
+      saveState,
+      error,
+      clearError,
+      /** files in the folder that couldn't be loaded (conflicts, invalid JSON) or were fixed up */
+      problems,
+      recentFolders,
+      forgetRecent,
+      openFolder,
+      createFolderWorkspace,
+      saveAsFolder,
+      closeWorkspace,
+      reloadFromDisk,
+      /** Write pending edits now (e.g. before a git commit), and wait for any write in flight. */
+      flush,
+      openFile,
+      saveFileAs,
+    }),
+    [
+      source,
+      saveState,
+      error,
+      clearError,
+      problems,
+      recentFolders,
+      forgetRecent,
+      openFolder,
+      createFolderWorkspace,
+      saveAsFolder,
+      closeWorkspace,
+      reloadFromDisk,
+      flush,
+      openFile,
+      saveFileAs,
+    ],
+  );
 }

@@ -5,10 +5,16 @@ import type { Workspace } from "./types";
 const disk = new Map<string, string>();
 const dirs = new Set<string>();
 const parent = (p: string) => p.slice(0, p.lastIndexOf("/"));
+// Reads in flight, to check the walk runs them concurrently but capped.
+const reads = { active: 0, max: 0, count: 0 };
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   exists: async (p: string) => disk.has(p) || dirs.has(p),
   readTextFile: async (p: string) => {
+    reads.count++;
+    reads.max = Math.max(reads.max, ++reads.active);
+    await new Promise((r) => setTimeout(r, 1));
+    reads.active--;
     if (!disk.has(p)) throw new Error(`ENOENT ${p}`);
     return disk.get(p)!;
   },
@@ -31,7 +37,7 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   },
 }));
 
-const { createWorkspaceFolder, openWorkspaceFolder, saveWorkspaceFolder } = await import("./folderStore");
+const { createWorkspaceFolder, filesMatch, openWorkspaceFolder, readManagedFiles, saveWorkspaceFolder } = await import("./folderStore");
 
 const ROOT = "/repo";
 const ws = (): Workspace => ({
@@ -54,6 +60,7 @@ beforeEach(() => {
   disk.clear();
   dirs.clear();
   dirs.add(ROOT);
+  Object.assign(reads, { active: 0, max: 0, count: 0 });
 });
 
 describe("workspace folders on disk", () => {
@@ -101,5 +108,42 @@ describe("workspace folders on disk", () => {
     expect(opened.problems).toHaveLength(1);
     await saveWorkspaceFolder(ROOT, opened.workspace, opened.files, opened.protectedPaths);
     expect(disk.get("/repo/collections/shop/auth/login.request.json")).toBe(conflicted);
+  });
+
+  it("reads a big folder concurrently, capped, and lists it in a stable order", async () => {
+    const big = ws();
+    const auth = big.collections[0].items[0];
+    if (auth.type !== "folder") throw new Error("fixture");
+    const login = auth.children[0];
+    if (login.type !== "request") throw new Error("fixture");
+    for (let i = 0; i < 60; i++) {
+      const id = `r${i + 2}`;
+      auth.children.push({ type: "request", id, request: { ...login.request, id, name: `Request ${i}` } });
+    }
+    await createWorkspaceFolder(ROOT, big);
+    Object.assign(reads, { active: 0, max: 0, count: 0 });
+    const first = await readManagedFiles(ROOT);
+    expect(reads.max).toBeGreaterThan(1);
+    expect(reads.max).toBeLessThanOrEqual(16);
+    expect([...(await readManagedFiles(ROOT)).keys()]).toEqual([...first.keys()]);
+    expect((await openWorkspaceFolder(ROOT)).workspace).toEqual(big);
+  });
+});
+
+describe("filesMatch", () => {
+  it("compares only the given files with the disk (null: must be absent)", async () => {
+    const files = await createWorkspaceFolder(ROOT, ws());
+    const login = "collections/shop/auth/login.request.json";
+    Object.assign(reads, { count: 0 });
+    expect(await filesMatch(ROOT, new Map([[login, files.get(login)!]]))).toBe(true);
+    expect(reads.count).toBe(1);
+    expect(await filesMatch(ROOT, new Map([["collections/shop/gone.request.json", null]]))).toBe(true);
+
+    disk.set(`${ROOT}/${login}`, "{}\n"); // edited outside the app
+    expect(await filesMatch(ROOT, new Map([[login, files.get(login)!]]))).toBe(false);
+    expect(await filesMatch(ROOT, new Map([[login, null]]))).toBe(false);
+    disk.delete(`${ROOT}/${login}`);
+    expect(await filesMatch(ROOT, new Map([[login, files.get(login)!]]))).toBe(false);
+    expect(await filesMatch(ROOT, new Map([[login, null]]))).toBe(true);
   });
 });

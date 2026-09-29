@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { countRequests, locateNode, moveCollection, moveNode, resolveVariables, siblingStep } from "./collectionTree";
+import {
+  addNode,
+  countRequests,
+  indexRequests,
+  locateNode,
+  moveCollection,
+  moveNode,
+  removeNode,
+  renameNode,
+  resolveVariables,
+  siblingStep,
+  updateRequestInCollections,
+} from "./collectionTree";
 import type { Collection, TreeNode } from "./types";
 
 describe("resolveVariables", () => {
@@ -222,5 +234,74 @@ describe("moveCollection", () => {
     expect(moveCollection(cols, "B", 1)).toBe(cols);
     expect(moveCollection(cols, "B", 2)).toBe(cols);
     expect(moveCollection(cols, "Z", 0)).toBe(cols);
+  });
+});
+
+// ---- structural sharing ---------------------------------------------------------------------
+
+type Folder = Extract<TreeNode, { type: "folder" }>;
+const kids = (n: TreeNode) => (n as Folder).children;
+
+describe("updates share untouched structure", () => {
+  it("updateRequestInCollections only renews the path to the edited request", () => {
+    const cols = fixture();
+    const out = updateRequestInCollections(cols, "r5", (r) => ({ ...r, url: "/x" }));
+    expect(out).not.toBe(cols);
+    expect(out[1]).toBe(cols[1]); // other collection
+    const [a, before] = [out[0], cols[0]];
+    expect(a).not.toBe(before);
+    for (const i of [0, 1, 2]) expect(a.items[i]).toBe(before.items[i]); // sibling requests
+    const f1 = a.items[3];
+    expect(f1).not.toBe(before.items[3]);
+    expect(kids(f1)[0]).toBe(kids(before.items[3])[0]); // r4, beside the path
+    const f2 = kids(f1)[1];
+    expect((kids(f2)[0] as Extract<TreeNode, { type: "request" }>).request.url).toBe("/x");
+    expect(a.variables).toBe(before.variables);
+  });
+
+  it("returns the same array when the request is unknown or the updater changes nothing", () => {
+    const cols = fixture();
+    expect(updateRequestInCollections(cols, "nope", (r) => ({ ...r, url: "/x" }))).toBe(cols);
+    expect(updateRequestInCollections(cols, "r5", (r) => r)).toBe(cols);
+  });
+
+  it("renameNode, removeNode and addNode keep siblings and untouched folders", () => {
+    const items = fixture()[0].items;
+    const renamed = renameNode(items, "r4", "Four");
+    for (const i of [0, 1, 2]) expect(renamed[i]).toBe(items[i]);
+    expect(kids(renamed[3])[1]).toBe(kids(items[3])[1]); // F2
+    expect(renameNode(items, "nope", "x")).toBe(items);
+
+    const removed = removeNode(items, "r5");
+    expect(removed[0]).toBe(items[0]);
+    expect(kids(removed[3])[0]).toBe(kids(items[3])[0]);
+    expect(kids(kids(removed[3])[1])).toEqual([]);
+    expect(removeNode(items, "nope")).toBe(items);
+
+    const added = addNode(items, "F1", requestNode("n"));
+    expect(added[0]).toBe(items[0]);
+    expect(kids(added[3])[1]).toBe(kids(items[3])[1]);
+    expect(kids(added[3]).map((n) => n.id)).toEqual(["r4", "F2", "n"]);
+  });
+
+  it("moveNode leaves collections and folders off the path alone", () => {
+    const cols = [...fixture(), collection("C", [requestNode("r7")])];
+    const out = moveNode(cols, "r1", { collectionId: "A", parentFolderId: "F2", index: 0 });
+    expect(out[1]).toBe(cols[1]);
+    expect(out[2]).toBe(cols[2]);
+    expect(out[0].items[0]).toBe(cols[0].items[1]); // r2, shifted but the same object
+    expect(kids(out[0].items[2])[0]).toBe(kids(cols[0].items[3])[0]); // r4
+  });
+});
+
+describe("indexRequests", () => {
+  it("maps every request id to the request and its collection", () => {
+    const cols = fixture();
+    const index = indexRequests(cols);
+    expect(index.size).toBe(6);
+    expect(index.get("r5")?.collection).toBe(cols[0]);
+    expect(index.get("r5")?.request).toBe((kids(kids(cols[0].items[3])[1])[0] as Extract<TreeNode, { type: "request" }>).request);
+    expect(index.get("r6")?.collection).toBe(cols[1]);
+    expect(index.get("F1")).toBeUndefined();
   });
 });
