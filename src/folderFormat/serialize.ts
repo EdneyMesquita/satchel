@@ -89,13 +89,13 @@ function writeItems(items: readonly TreeNode[], dir: string, trail: string[], w:
       const name = alloc(slugify(node.name));
       const childOrder = writeItems(node.children, `${dir}/${name}`, [...trail, node.name], w);
       const path = `${dir}/${name}/${FOLDER_FILE}`;
-      w.files.set(path, toJson({ id: node.id, name: node.name, order: childOrder }));
+      w.files?.set(path, toJson({ id: node.id, name: node.name, order: childOrder }));
       w.labels.set(path, { kind: "folder", id: node.id, trail: [...trail, node.name] });
       order.push(name);
     } else {
       const name = alloc(slugify(node.request.name), REQUEST_SUFFIX);
       const path = `${dir}/${name}`;
-      w.files.set(path, requestFile(node.request, w.root, w.local));
+      w.files?.set(path, requestFile(node.request, w.root, w.local));
       w.labels.set(path, { kind: "request", id: node.id, trail: [...trail, node.request.name], method: node.request.method });
       order.push(name);
     }
@@ -104,11 +104,13 @@ function writeItems(items: readonly TreeNode[], dir: string, trail: string[], w:
 }
 
 function writeCollection(c: Collection, dir: string, w: Writer) {
-  const secrets: Record<string, string> = {};
-  const vars = variables(c.variables, secrets);
-  if (Object.keys(secrets).length) w.local.secrets.collections[c.id] = secrets;
   const order = writeItems(c.items, dir, [c.name], w);
-  w.files.set(`${dir}/${COLLECTION_FILE}`, toJson({ id: c.id, name: c.name, variables: vars, order }));
+  if (w.files) {
+    const secrets: Record<string, string> = {};
+    const vars = variables(c.variables, secrets);
+    if (Object.keys(secrets).length) w.local.secrets.collections[c.id] = secrets;
+    w.files.set(`${dir}/${COLLECTION_FILE}`, toJson({ id: c.id, name: c.name, variables: vars, order }));
+  }
   w.labels.set(`${dir}/${COLLECTION_FILE}`, { kind: "collection", id: c.id, trail: [c.name] });
 }
 
@@ -128,14 +130,15 @@ export type FileLabel =
   | { kind: "workspace"; trail: string[] };
 
 interface Writer {
-  files: FileMap;
+  /** null when only the labels are wanted: paths are allocated the same way, no file is built */
+  files: FileMap | null;
   labels: Map<string, FileLabel>;
   root: string | null;
   local: LocalState;
 }
 
-function write(ws: Workspace, root: string | null): Writer {
-  const w: Writer = { files: new Map(), labels: new Map(), root, local: emptyLocalState() };
+function write(ws: Workspace, root: string | null, contents = true): Writer {
+  const w: Writer = { files: contents ? new Map() : null, labels: new Map(), root, local: emptyLocalState() };
   const { files, local } = w;
   local.activeEnvironmentId = ws.activeEnvironmentId;
 
@@ -149,10 +152,13 @@ function write(ws: Workspace, root: string | null): Writer {
   const envAlloc = nameAllocator();
   const environmentOrder = ws.environments.map((e) => {
     const name = envAlloc(slugify(e.name), ".json");
-    files.set(`${ENVIRONMENTS_DIR}/${name}`, environmentFile(e, local));
+    files?.set(`${ENVIRONMENTS_DIR}/${name}`, environmentFile(e, local));
     w.labels.set(`${ENVIRONMENTS_DIR}/${name}`, { kind: "environment", id: e.id, trail: [e.name] });
     return name;
   });
+
+  w.labels.set(ROOT_FILE, { kind: "workspace", trail: ["Workspace settings"] });
+  if (!files) return w;
 
   const globalSecrets: Record<string, string> = {};
   const globals = variables(ws.globals, globalSecrets);
@@ -162,7 +168,6 @@ function write(ws: Workspace, root: string | null): Writer {
     ROOT_FILE,
     toJson({ format: FORMAT_ID, version: FORMAT_VERSION, collections: collectionOrder, environments: environmentOrder, globals }),
   );
-  w.labels.set(ROOT_FILE, { kind: "workspace", trail: ["Workspace settings"] });
   files.set(LOCAL_FILE, toJson(local));
   files.set(LOCAL_GITIGNORE, "# Personal Satchel state (active environment, secrets). Never commit it.\n*\n");
   return w;
@@ -173,12 +178,15 @@ function write(ws: Workspace, root: string | null): Writer {
  * form-data files inside the workspace be stored as relative paths.
  */
 export function workspaceToFiles(ws: Workspace, root: string | null = null): FileMap {
-  return write(ws, root).files;
+  return write(ws, root).files!;
 }
 
-/** Which request, folder, collection or environment each workspace file holds. */
+/**
+ * Which request, folder, collection or environment each workspace file holds.
+ * Only the paths: no file is built, so it's cheap enough to run as the workspace changes.
+ */
 export function workspaceFileLabels(ws: Workspace): Map<string, FileLabel> {
-  return write(ws, null).labels;
+  return write(ws, null, false).labels;
 }
 
 /** `path` relative to `root` with "/" separators, or null when it isn't inside it. */

@@ -13,7 +13,6 @@ export interface GitInfo {
   isRepo: boolean;
   /** the workspace folder relative to the repository root, with a trailing "/" ("" at the root) */
   prefix: string;
-  remotes: string[];
   /** a merge or rebase in progress (e.g. after a pull that conflicted) */
   operation: "merge" | "rebase" | null;
 }
@@ -25,6 +24,8 @@ function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
 
 export const gitVersion = () => call<string>("git_version");
 export const gitInfo = (cwd: string) => call<GitInfo>("git_info", { cwd });
+/** Only needed for the first push of a branch, so it isn't part of `gitInfo`. */
+export const gitRemotes = (cwd: string) => call<string[]>("git_remotes", { cwd });
 export const gitStatus = (cwd: string) => call<string>("git_status", { cwd });
 export const gitCommit = (cwd: string, message: string, paths: string[]) => call<GitOutput>("git_commit", { cwd, message, paths });
 /** Finish a merge: stage the folder's resolutions and commit everything (refuses while conflict markers remain). */

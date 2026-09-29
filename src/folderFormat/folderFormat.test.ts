@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Workspace } from "@/types";
+import type { TreeNode, Workspace } from "@/types";
 import { parseWorkspace } from "@/workspace";
 import {
   applyPlanToMap,
@@ -8,6 +8,7 @@ import {
   planWrite,
   relativeInside,
   slugify,
+  workspaceFileLabels,
   workspaceToFiles,
   WorkspaceFolderError,
   type FileMap,
@@ -311,6 +312,27 @@ describe("names and paths", () => {
     expect(alloc("login", ".request.json")).toBe("login.request.json");
     expect(alloc("Login", ".request.json")).toBe("Login-2.request.json");
     expect(alloc("folder", ".json")).toBe("folder-2.json");
+  });
+
+  it("labels exactly the paths a full write produces, name collisions included", () => {
+    const ws = sample();
+    const col = ws.collections[0];
+    const req = (col.items[1] as Extract<TreeNode, { type: "request" }>).request;
+    // A folder named like a request, one named like the reserved folder file, and a nested collision.
+    col.items.push(
+      { type: "folder", id: "f-list", name: "List products", children: [] },
+      { type: "folder", id: "f-folder", name: "Folder", children: [{ type: "request", id: "r-x", request: { ...req, id: "r-x", name: "Folder" } }] },
+      { type: "folder", id: "f-auth-2", name: "auth", children: [{ type: "request", id: "r-login-2", request: { ...req, id: "r-login-2", name: "Login" } }] },
+    );
+    // Collections and environments with the same slug.
+    ws.collections.push({ id: "c-shop-2", name: "Shop  API!", variables: [], items: [] }, { id: "c-emoji", name: "🚀", variables: [], items: [] });
+    ws.environments.push({ id: "e-local-2", name: "local", variables: [] });
+
+    const labels = workspaceFileLabels(ws);
+    const files = [...workspaceToFiles(ws, ROOT).keys()].filter((p) => !p.startsWith(".satchel/"));
+    expect([...labels.keys()].sort()).toEqual(files.sort());
+    expect(labels.get("collections/shop-api-2/collection.json")).toMatchObject({ kind: "collection", id: "c-shop-2" });
+    expect(labels.get("environments/local-2.json")).toMatchObject({ kind: "environment", id: "e-local-2" });
   });
 
   it("recognizes managed paths", () => {

@@ -9,6 +9,7 @@ use serde::Serialize;
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -32,7 +33,6 @@ pub struct GitInfo {
     pub is_repo: bool,
     /// The folder's path relative to the repository root, with a trailing "/" ("" at the root).
     pub prefix: String,
-    pub remotes: Vec<String>,
     /// "merge" or "rebase" while one is in progress (e.g. a pull that hit conflicts), else None.
     pub operation: Option<String>,
 }
@@ -63,39 +63,54 @@ fn run(cwd: &str, args: &[&str], timeout: Duration) -> Result<GitOutput, String>
         })?;
 
     // Drain both pipes on their own threads so a large output can't fill a pipe and block git.
-    let mut out = child.stdout.take().ok_or("no stdout")?;
-    let mut err = child.stderr.take().ok_or("no stderr")?;
-    let out_reader = thread::spawn(move || {
-        let mut s = String::new();
-        let _ = out.read_to_string(&mut s);
-        s
-    });
-    let err_reader = thread::spawn(move || {
-        let mut s = String::new();
-        let _ = err.read_to_string(&mut s);
-        s
-    });
+    // Each reports on a channel, so waiting is a blocking receive with the timeout: no polling.
+    let out = child.stdout.take().ok_or("no stdout")?;
+    let err = child.stderr.take().ok_or("no stderr")?;
+    let (tx, rx) = mpsc::channel::<(bool, String)>();
+    for (is_out, mut pipe) in [
+        (true, Box::new(out) as Box<dyn Read + Send>),
+        (false, Box::new(err)),
+    ] {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            let mut s = String::new();
+            let _ = pipe.read_to_string(&mut s);
+            let _ = tx.send((is_out, s));
+        });
+    }
+    drop(tx);
 
-    let started = Instant::now();
+    let deadline = Instant::now() + timeout;
+    let stopped = |child: &mut std::process::Child| {
+        let _ = child.kill();
+        let _ = child.wait();
+        Err(format!(
+            "git {} took longer than {}s and was stopped",
+            args.first().unwrap_or(&""),
+            timeout.as_secs()
+        ))
+    };
+    let (mut stdout, mut stderr) = (String::new(), String::new());
+    for _ in 0..2 {
+        match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok((true, s)) => stdout = s,
+            Ok((false, s)) => stderr = s,
+            Err(_) => return stopped(&mut child),
+        }
+    }
+    // Both pipes are closed, so git is exiting; only a process that closed them and kept
+    // running would get here without an exit status, and the timeout still applies to it.
     let status = loop {
         match child.try_wait().map_err(|e| e.to_string())? {
             Some(status) => break status,
-            None if started.elapsed() > timeout => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(format!(
-                    "git {} took longer than {}s and was stopped",
-                    args.first().unwrap_or(&""),
-                    timeout.as_secs()
-                ));
-            }
-            None => thread::sleep(Duration::from_millis(15)),
+            None if Instant::now() >= deadline => return stopped(&mut child),
+            None => thread::sleep(Duration::from_millis(1)),
         }
     };
     Ok(GitOutput {
         code: status.code().unwrap_or(-1),
-        stdout: out_reader.join().unwrap_or_default(),
-        stderr: err_reader.join().unwrap_or_default(),
+        stdout,
+        stderr,
     })
 }
 
@@ -148,35 +163,74 @@ pub async fn git_version() -> Result<String, String> {
         .await
 }
 
+/// Whether the folder is a repository, where in it, and whether a merge or rebase is under way:
+/// one `git rev-parse`, since this runs on every background refresh that re-reads it.
 #[tauri::command]
 pub async fn git_info(cwd: String) -> Result<GitInfo, String> {
     blocking(move || {
-        let inside = run(&cwd, &["rev-parse", "--is-inside-work-tree"], LOCAL_TIMEOUT)?;
-        if inside.code != 0 || inside.stdout.trim() != "true" {
-            return Ok(GitInfo {
-                is_repo: false,
-                prefix: String::new(),
-                remotes: vec![],
-                operation: None,
-            });
-        }
-        let prefix = ok(run(&cwd, &["rev-parse", "--show-prefix"], LOCAL_TIMEOUT)?)?
-            .stdout
-            .trim()
-            .to_string();
-        let remotes = ok(run(&cwd, &["remote"], LOCAL_TIMEOUT)?)?
+        let out = run(
+            &cwd,
+            &[
+                "rev-parse",
+                "--is-inside-work-tree",
+                "--show-prefix",
+                "--git-path",
+                "MERGE_HEAD",
+                "--git-path",
+                "rebase-merge",
+                "--git-path",
+                "rebase-apply",
+            ],
+            LOCAL_TIMEOUT,
+        )?;
+        Ok(parse_info(&cwd, &out).unwrap_or(GitInfo {
+            is_repo: false,
+            prefix: String::new(),
+            operation: None,
+        }))
+    })
+    .await
+}
+
+/// `rev-parse --is-inside-work-tree --show-prefix --git-path …` prints one line each:
+/// "true", the prefix ("" at the repository root), then the three paths relative to `cwd`.
+/// Outside a repository git fails; inside `.git` it prints "false". Both are "not a repo" (None).
+fn parse_info(cwd: &str, out: &GitOutput) -> Option<GitInfo> {
+    if out.code != 0 {
+        return None;
+    }
+    let mut lines = out.stdout.split('\n').map(|l| l.trim_end_matches('\r'));
+    if lines.next()? != "true" {
+        return None;
+    }
+    let prefix = lines.next()?.to_string();
+    let exists =
+        |line: Option<&str>| line.is_some_and(|p| !p.is_empty() && Path::new(cwd).join(p).exists());
+    let operation = if exists(lines.next()) {
+        Some("merge".to_string())
+    } else if exists(lines.next()) || exists(lines.next()) {
+        Some("rebase".to_string())
+    } else {
+        None
+    };
+    Some(GitInfo {
+        is_repo: true,
+        prefix,
+        operation,
+    })
+}
+
+/// The repository's remotes, for the first push of a branch.
+#[tauri::command]
+pub async fn git_remotes(cwd: String) -> Result<Vec<String>, String> {
+    blocking(move || {
+        Ok(ok(run(&cwd, &["remote"], LOCAL_TIMEOUT)?)?
             .stdout
             .lines()
             .map(str::trim)
             .filter(|l| !l.is_empty())
             .map(String::from)
-            .collect();
-        Ok(GitInfo {
-            is_repo: true,
-            prefix,
-            remotes,
-            operation: operation_in_progress(&cwd)?,
-        })
+            .collect())
     })
     .await
 }
@@ -253,26 +307,6 @@ pub async fn git_push(cwd: String, set_upstream: Option<String>) -> Result<GitOu
         None => ok(run(&cwd, &["push"], NETWORK_TIMEOUT)?),
     })
     .await
-}
-
-fn operation_in_progress(cwd: &str) -> Result<Option<String>, String> {
-    let merging = run(
-        cwd,
-        &["rev-parse", "-q", "--verify", "MERGE_HEAD"],
-        LOCAL_TIMEOUT,
-    )?
-    .code
-        == 0;
-    if merging {
-        return Ok(Some("merge".into()));
-    }
-    for dir in ["rebase-merge", "rebase-apply"] {
-        let path = ok(run(cwd, &["rev-parse", "--git-path", dir], LOCAL_TIMEOUT)?)?.stdout;
-        if Path::new(cwd).join(path.trim()).exists() {
-            return Ok(Some("rebase".into()));
-        }
-    }
-    Ok(None)
 }
 
 /// A line git writes into a file with an unresolved conflict.
@@ -431,6 +465,61 @@ mod tests {
         let status = tauri::async_runtime::block_on(git_status(ws.clone())).unwrap();
         assert!(!status.contains("old.request.json"));
         let _ = std::fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
+    fn reads_the_repo_root_a_subfolder_and_an_operation_in_one_call() {
+        let cwd = temp_repo("info");
+        let info = block(git_info(cwd.clone())).unwrap();
+        assert!(info.is_repo);
+        assert_eq!(info.prefix, "", "an empty line at the root");
+        assert_eq!(info.operation, None);
+
+        write(&cwd, "api/satchel/satchel.json", "{}");
+        let ws = format!("{cwd}/api/satchel");
+        assert_eq!(block(git_info(ws.clone())).unwrap().prefix, "api/satchel/");
+
+        // What git leaves behind while a rebase or a merge is stopped (the paths are relative to the subfolder).
+        std::fs::create_dir_all(format!("{cwd}/.git/rebase-merge")).unwrap();
+        assert_eq!(
+            block(git_info(ws.clone())).unwrap().operation.as_deref(),
+            Some("rebase")
+        );
+        std::fs::remove_dir_all(format!("{cwd}/.git/rebase-merge")).unwrap();
+        std::fs::write(format!("{cwd}/.git/MERGE_HEAD"), "0000\n").unwrap();
+        assert_eq!(
+            block(git_info(ws.clone())).unwrap().operation.as_deref(),
+            Some("merge")
+        );
+
+        // Inside .git, git answers "false": not a work tree.
+        assert!(!block(git_info(format!("{cwd}/.git"))).unwrap().is_repo);
+
+        assert!(block(git_remotes(cwd.clone())).unwrap().is_empty());
+        ok(run(
+            &cwd,
+            &["remote", "add", "origin", "https://example.com/r.git"],
+            LOCAL_TIMEOUT,
+        )
+        .unwrap())
+        .unwrap();
+        assert_eq!(block(git_remotes(ws)).unwrap(), vec!["origin".to_string()]);
+        let _ = std::fs::remove_dir_all(&cwd);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stops_a_command_that_runs_too_long() {
+        let started = Instant::now();
+        let err = run(
+            ".",
+            &["-c", "alias.nap=!sleep 5", "nap"],
+            Duration::from_millis(300),
+        )
+        .err()
+        .unwrap();
+        assert!(err.contains("was stopped"), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(3));
     }
 
     #[test]

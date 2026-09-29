@@ -13,6 +13,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             git::git_version,
             git::git_info,
+            git::git_remotes,
             git::git_status,
             git::git_commit,
             git::git_commit_merge,
