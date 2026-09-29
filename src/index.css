@@ -1,0 +1,263 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* Dark is the default theme; [data-theme="light"] on <html> switches to the light twin. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root,
+:root[data-theme="dark"] {
+  --bg0: #111412;
+  --bg1: #161a18;
+  --bg2: #1c211e;
+  --bg3: #252b28;
+  --line: #262c29;
+  --line2: #343b37;
+  --fg: #e4e8e5;
+  --fg2: #a7afab;
+  --fg3: #6f7873;
+  --brass: #d6a54c;
+  --brass-ink: #1b1407;
+  --brass-soft: rgba(214, 165, 76, 0.14);
+  --brass-line: rgba(214, 165, 76, 0.45);
+  --ok: #4fbf7f;
+  --ok-soft: rgba(79, 191, 127, 0.13);
+  --warn: #d6a54c;
+  --err: #ef6a6a;
+  --err-soft: rgba(239, 106, 106, 0.13);
+  --m-get: #5b9cf0;
+  --m-post: #4fbf7f;
+  --m-put: #a484f0;
+  --m-patch: #3fbfb5;
+  --m-delete: #ef6a6a;
+  --m-query: #e27fb4;
+  --m-head: #9aa39e;
+  --m-options: #c69ad6;
+  --j-k: #8fb8e8;
+  --j-s: #b5cf8a;
+  --j-n: #e39a6e;
+  --j-b: #b69af0;
+  --j-p: #6f7873;
+  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line2);
+  --scrim: rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg0: #f1f2f0;
+  --bg1: #ffffff;
+  --bg2: #f3f4f2;
+  --bg3: #e7eae7;
+  --line: #e2e5e2;
+  --line2: #cfd4d0;
+  --fg: #151917;
+  --fg2: #4a524e;
+  --fg3: #7b837f;
+  --brass: #b27f1c;
+  --brass-ink: #ffffff;
+  --brass-soft: rgba(178, 127, 28, 0.12);
+  --brass-line: rgba(178, 127, 28, 0.5);
+  --ok: #238a52;
+  --ok-soft: rgba(35, 138, 82, 0.09);
+  --warn: #a8740f;
+  --err: #cc3b3b;
+  --err-soft: rgba(204, 59, 59, 0.09);
+  --m-get: #2f6fcf;
+  --m-post: #238a52;
+  --m-put: #7651d0;
+  --m-patch: #16857d;
+  --m-delete: #cc3b3b;
+  --m-query: #b8457f;
+  --m-head: #6b746f;
+  --m-options: #9a55b0;
+  --j-k: #2b5fa8;
+  --j-s: #4d7a1c;
+  --j-n: #b3581f;
+  --j-b: #7a4fc4;
+  --j-p: #8a918d;
+  --shadow-pop: 0 12px 36px rgba(20, 30, 25, 0.16), 0 0 0 1px var(--line2);
+  --scrim: rgba(20, 30, 25, 0.2);
+  color-scheme: light;
+}
+
+@theme inline {
+  /* Satchel palette — use these in components (bg-bg1, text-fg3, border-line, text-m-get, …) */
+  --color-bg0: var(--bg0);
+  --color-bg1: var(--bg1);
+  --color-bg2: var(--bg2);
+  --color-bg3: var(--bg3);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-fg: var(--fg);
+  --color-fg2: var(--fg2);
+  --color-fg3: var(--fg3);
+  --color-brass: var(--brass);
+  --color-brass-ink: var(--brass-ink);
+  --color-brass-soft: var(--brass-soft);
+  --color-brass-line: var(--brass-line);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-err-soft: var(--err-soft);
+  --color-m-get: var(--m-get);
+  --color-m-post: var(--m-post);
+  --color-m-put: var(--m-put);
+  --color-m-patch: var(--m-patch);
+  --color-m-delete: var(--m-delete);
+  --color-m-query: var(--m-query);
+  --color-m-head: var(--m-head);
+  --color-m-options: var(--m-options);
+  --color-j-k: var(--j-k);
+  --color-j-s: var(--j-s);
+  --color-j-n: var(--j-n);
+  --color-j-b: var(--j-b);
+  --color-j-p: var(--j-p);
+
+  /* shadcn/ui semantic tokens, mapped onto the Satchel palette */
+  --color-background: var(--bg1);
+  --color-foreground: var(--fg);
+  --color-card: var(--bg1);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--bg1);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--fg);
+  --color-primary-foreground: var(--bg1);
+  --color-secondary: var(--bg3);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--bg2);
+  --color-muted-foreground: var(--fg3);
+  --color-accent: var(--bg3);
+  --color-accent-foreground: var(--fg);
+  --color-destructive: var(--err);
+  --color-border: var(--line);
+  --color-input: var(--line2);
+  --color-ring: var(--brass-line);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --shadow-pop: var(--shadow-pop);
+
+  --animate-sweep: sweep 0.5s ease-out both;
+  --animate-progress: progress 1.2s ease-out forwards;
+  --animate-fade-in: fade-in 0.18s ease-out;
+
+  @keyframes sweep {
+    0% { box-shadow: inset 0 -2px 0 var(--brass); filter: brightness(1.5); }
+    100% { box-shadow: inset 0 0 0 transparent; filter: none; }
+  }
+  @keyframes progress {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(0.92); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(2px); }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    background: var(--bg0);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+  }
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    appearance: textfield;
+  }
+  ::selection {
+    background: var(--brass-soft);
+  }
+  :focus-visible {
+    outline: 1.5px solid var(--brass);
+    outline-offset: 1px;
+  }
+  input:focus-visible,
+  textarea:focus-visible,
+  [contenteditable]:focus-visible {
+    outline: 0;
+  }
+}
+
+@layer components {
+  /* {{variable}} tokens. No padding/border: they sit inside the VariableInput mirror,
+     which must keep glyph-for-glyph metrics identical to the native input. */
+  .tok {
+    color: var(--brass);
+    background: var(--brass-soft);
+    border-radius: 2px;
+  }
+  .tok-miss {
+    color: var(--err);
+    background: var(--err-soft);
+    text-decoration: underline wavy;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  /* :pathParam segments */
+  .pp {
+    color: var(--j-k);
+    background: color-mix(in srgb, var(--j-k) 13%, transparent);
+    border-radius: 2px;
+  }
+  /* ? & = in the query string */
+  .qs {
+    color: var(--fg3);
+  }
+  .sweep .tok,
+  .sweep [data-resolved-token] {
+    animation: var(--animate-sweep);
+    animation-delay: calc(var(--i, 0) * 28ms);
+  }
+
+  /* JSON syntax colors (response viewer + body editor) */
+  .json-key { color: var(--j-k); }
+  .json-string { color: var(--j-s); }
+  .json-number { color: var(--j-n); }
+  .json-literal { color: var(--j-b); }
+  .json-punct { color: var(--j-p); }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

@@ -1,4 +1,5 @@
 import type { Collection, Environment, KeyValue, TreeNode, Workspace } from "./types";
+import { normalizeRequest } from "./url";
 
 export class WorkspaceFileError extends Error {}
 
@@ -37,7 +38,14 @@ export function parseWorkspace(json: unknown): Workspace {
   const environments = Array.isArray(w.environments) && w.environments.every(isEnvironment) ? w.environments : [];
   const activeEnvironmentId = typeof w.activeEnvironmentId === "string" ? w.activeEnvironmentId : null;
   const globals = isKeyValueArray(w.globals) ? w.globals : [];
-  return { collections: w.collections, environments, activeEnvironmentId, globals };
+  const collections = w.collections.map((c) => ({ ...c, items: normalizeTree(c.items) }));
+  return { collections, environments, activeEnvironmentId, globals };
+}
+
+function normalizeTree(items: TreeNode[]): TreeNode[] {
+  return items.map((n): TreeNode =>
+    n.type === "folder" ? { ...n, children: normalizeTree(n.children) } : { ...n, request: normalizeRequest(n.request) },
+  );
 }
 
 export function serializeWorkspace(workspace: Workspace): string {

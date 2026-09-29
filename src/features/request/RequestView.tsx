@@ -1,0 +1,161 @@
+import { useCallback, useEffect, useRef } from "react";
+import { toast } from "sonner";
+import type { HttpMethod, SatchelRequest } from "@/types";
+import { useWorkspace } from "@/state/workspace";
+import { useSession, unresolvedVariables } from "@/state/session";
+import { isResolved } from "@/variables";
+import { normalizeRequest, paramsFromUrl, pathParamNames } from "@/url";
+import { parseCurl } from "@/curl";
+import { VariableHoverLayer } from "@/features/variables/VariableHover";
+import { ResponsePane } from "@/features/response/ResponsePane";
+import { UrlBar } from "./UrlBar";
+import { ResolvedUrl } from "./ResolvedUrl";
+import { SendBlockerBar } from "./SendBlockerBar";
+import { RequestPane } from "./RequestPane";
+import { SplitView } from "./SplitView";
+
+const SWEEP_MS = 1400;
+
+/** Keep pathVariables in step with the URL's /:name segments (drop only empty, orphaned ones). */
+function syncPathVariables(url: string, previous: Record<string, string> | undefined): Record<string, string> {
+  const names = pathParamNames(url);
+  const next: Record<string, string> = {};
+  for (const [k, v] of Object.entries(previous ?? {})) if (v !== "" || names.includes(k)) next[k] = v;
+  for (const n of names) if (next[n] === undefined) next[n] = "";
+  return next;
+}
+
+function focusEnd(el: HTMLInputElement | null | undefined) {
+  if (!el) return;
+  el.focus();
+  const n = el.value.length;
+  el.setSelectionRange(n, n);
+}
+
+export function RequestView({ requestId }: { requestId: string }) {
+  const ws = useWorkspace();
+  const session = useSession();
+  const viewRef = useRef<HTMLDivElement>(null);
+  const urlRef = useRef<HTMLInputElement>(null);
+  const location = ws.findRequest(requestId);
+  const request = location?.request;
+  const context = ws.variableContext(requestId);
+
+  const { updateRequest } = ws;
+  const update = useCallback((updater: (r: SatchelRequest) => SatchelRequest) => updateRequest(requestId, updater), [updateRequest, requestId]);
+
+  // "New request" asks for the URL field to take focus.
+  const { focusUrlOf, requestUrlFocus } = session;
+  useEffect(() => {
+    if (focusUrlOf !== requestId) return;
+    focusEnd(urlRef.current);
+    requestUrlFocus(null);
+  }, [focusUrlOf, requestId, requestUrlFocus]);
+
+  // Environment switch: sweep a highlight across every token, staggered in reading order.
+  const sweepSeen = useRef(session.sweepKey);
+  useEffect(() => {
+    if (session.sweepKey === sweepSeen.current) return;
+    sweepSeen.current = session.sweepKey;
+    const view = viewRef.current;
+    if (!view) return;
+    view.querySelectorAll<HTMLElement>(".tok, [data-resolved-token]").forEach((el, i) => el.style.setProperty("--i", String(i)));
+    view.classList.remove("sweep");
+    void view.offsetWidth;
+    view.classList.add("sweep");
+    const t = setTimeout(() => view.classList.remove("sweep"), SWEEP_MS);
+    return () => clearTimeout(t);
+  }, [session.sweepKey]);
+
+  const focusPathParam = useCallback(
+    (name: string) => {
+      session.setRequestTab(requestId, "params");
+      setTimeout(() => focusEnd(viewRef.current?.querySelector<HTMLInputElement>(`[data-path-input="${CSS.escape(name)}"]`)), 30);
+    },
+    [session, requestId],
+  );
+
+  if (!request) return null;
+
+  const sending = Boolean(session.sending[requestId]);
+  const blocker = session.blocker?.requestId === requestId ? session.blocker : null;
+  const env = ws.activeEnvironment;
+
+  const send = (force = false) => {
+    session.send(requestId, { force });
+    // An empty :path param holds the send back and opens Params: put the caret in it.
+    const blocked = !force && unresolvedVariables(request, (k) => isResolved(k, context)).length > 0;
+    const emptyPath = pathParamNames(request.url).find((n) => !request.pathVariables?.[n]);
+    if (!blocked && !force && emptyPath) focusPathParam(emptyPath);
+  };
+
+  const cancel = () => {
+    session.cancel(requestId);
+    toast("Request cancelled.");
+  };
+
+  const setUrl = (url: string) =>
+    update((r) => ({ ...r, url, params: paramsFromUrl(url, r.params), pathVariables: syncPathVariables(url, r.pathVariables) }));
+
+  const setMethod = (method: HttpMethod) => update((r) => ({ ...r, method }));
+
+  // Pasting a curl command into the URL replaces this request's method, URL, headers, body and auth.
+  const pasteText = (text: string): boolean => {
+    if (!/^\s*curl\b/i.test(text)) return false;
+    let parsed;
+    try {
+      parsed = parseCurl(text);
+    } catch {
+      return false; // looked like curl but didn't parse: let the raw text land in the field
+    }
+    update((r) =>
+      normalizeRequest({
+        ...r,
+        method: parsed.method,
+        url: parsed.url,
+        params: paramsFromUrl(parsed.url, []),
+        pathVariables: {},
+        headers: parsed.headers,
+        body: parsed.body,
+        auth: parsed.auth,
+      }),
+    );
+    const parts = [parsed.method, `${parsed.headers.length} header${parsed.headers.length === 1 ? "" : "s"}`];
+    if (parsed.body.mode !== "none") parts.push(parsed.body.mode === "raw" ? "JSON body" : "form body");
+    toast(`Parsed cURL: ${parts.join(", ")}.`);
+    return true;
+  };
+
+  return (
+    <div ref={viewRef} className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+      <div className="border-b border-line px-3 pt-2.5 pb-2">
+        <UrlBar
+          method={request.method}
+          url={request.url}
+          context={context}
+          sending={sending}
+          onMethodChange={setMethod}
+          onUrlChange={setUrl}
+          onSend={() => send()}
+          onCancel={cancel}
+          onPasteText={pasteText}
+          inputRef={urlRef}
+        />
+        <ResolvedUrl url={request.url} pathVariables={request.pathVariables} context={context} />
+        {blocker && (
+          <SendBlockerBar
+            missing={blocker.missingVariables}
+            environmentName={env?.name}
+            onDefine={() => session.openEnvironments({ variable: blocker.missingVariables[0], environmentId: env?.id })}
+            onSendAnyway={() => send(true)}
+          />
+        )}
+      </div>
+      <SplitView
+        left={<RequestPane request={request} context={context} update={update} />}
+        right={<ResponsePane requestId={requestId} />}
+      />
+      <VariableHoverLayer rootRef={viewRef} requestId={requestId} onEditPathParam={focusPathParam} />
+    </div>
+  );
+}

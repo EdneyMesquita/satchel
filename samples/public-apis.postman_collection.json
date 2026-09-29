@@ -1,0 +1,643 @@
+{
+  "info": {
+    "name": "Public APIs Playground",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Test collection for Satchel: JSONPlaceholder, httpbin and GitHub. No accounts needed."
+  },
+  "variable": [
+    {
+      "key": "jsonph",
+      "value": "https://jsonplaceholder.typicode.com"
+    },
+    {
+      "key": "httpbin",
+      "value": "https://httpbin.org"
+    },
+    {
+      "key": "github",
+      "value": "https://api.github.com"
+    },
+    {
+      "key": "ghUser",
+      "value": "octocat"
+    },
+    {
+      "key": "httpbinToken",
+      "value": "demo-token"
+    }
+  ],
+  "item": [
+    {
+      "name": "JSONPlaceholder (CRUD)",
+      "item": [
+        {
+          "name": "List posts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{jsonph}}/posts?_limit=5&userId=1",
+              "query": [
+                {
+                  "key": "_limit",
+                  "value": "5"
+                },
+                {
+                  "key": "userId",
+                  "value": "1"
+                },
+                {
+                  "key": "_page",
+                  "value": "2",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get post",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{jsonph}}/posts/:id",
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Comments of a post",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{jsonph}}/posts/:id/comments",
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create post",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{jsonph}}/posts"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Hello from Satchel\",\n  \"body\": \"Testing the new UI\",\n  \"userId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Replace post",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{jsonph}}/posts/:id",
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"title\": \"Replaced\",\n  \"body\": \"Whole resource\",\n  \"userId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update title",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{jsonph}}/posts/:id",
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Just the title\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete post",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{jsonph}}/posts/:id",
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "httpbin (echo & edge cases)",
+      "item": [
+        {
+          "name": "GET with query",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Trace-Id",
+                "value": "{{traceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{httpbin}}/get?search=satchel&page=1",
+              "query": [
+                {
+                  "key": "search",
+                  "value": "satchel"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "debug",
+                  "value": "true",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST JSON",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{httpbin}}/post"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user\": \"{{ghUser}}\",\n  \"tags\": [\n    \"api\",\n    \"test\"\n  ],\n  \"active\": true,\n  \"count\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Form data (text + file)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{httpbin}}/post"
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "Profile picture",
+                  "type": "text"
+                },
+                {
+                  "key": "avatar",
+                  "type": "file",
+                  "src": "/home/you/Pictures/avatar.png"
+                },
+                {
+                  "key": "draft",
+                  "value": "true",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "URL-encoded form",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{httpbin}}/post"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "client_id",
+                  "value": "satchel-demo"
+                },
+                {
+                  "key": "scope",
+                  "value": "read",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Basic auth (passes)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{httpbin}}/basic-auth/:user/:passwd",
+              "variable": [
+                {
+                  "key": "user",
+                  "value": "satchel"
+                },
+                {
+                  "key": "passwd",
+                  "value": "s3cret"
+                }
+              ]
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "satchel"
+                },
+                {
+                  "key": "password",
+                  "value": "s3cret"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Bearer auth",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{httpbin}}/bearer"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{httpbinToken}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "API key in query",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{httpbin}}/get"
+            },
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "key",
+                  "value": "api_key"
+                },
+                {
+                  "key": "value",
+                  "value": "demo-123"
+                },
+                {
+                  "key": "in",
+                  "value": "query"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Echo headers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Custom",
+                "value": "hello"
+              },
+              {
+                "key": "X-Disabled",
+                "value": "nope",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{httpbin}}/headers"
+            }
+          }
+        },
+        {
+          "name": "Status 429",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{httpbin}}/status/:code",
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "429"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Slow response (2s)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{httpbin}}/delay/:seconds",
+              "variable": [
+                {
+                  "key": "seconds",
+                  "value": "2"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search via QUERY",
+          "request": {
+            "method": "QUERY",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{httpbin}}/anything"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"q\": \"satchel\",\n  \"limit\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "QUERY is an IETF draft; servers that don't support it answer 405."
+          }
+        },
+        {
+          "name": "Pre-request script (skipped)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{httpbin}}/uuid"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.environment.set('traceId', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "GitHub (no token needed)",
+      "item": [
+        {
+          "name": "Get user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.github+json"
+              },
+              {
+                "key": "X-GitHub-Api-Version",
+                "value": "2022-11-28"
+              }
+            ],
+            "url": {
+              "raw": "{{github}}/users/:username",
+              "variable": [
+                {
+                  "key": "username",
+                  "value": "{{ghUser}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "User repos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.github+json"
+              },
+              {
+                "key": "X-GitHub-Api-Version",
+                "value": "2022-11-28"
+              }
+            ],
+            "url": {
+              "raw": "{{github}}/users/{{ghUser}}/repos?per_page=5&sort=updated",
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "5"
+                },
+                {
+                  "key": "sort",
+                  "value": "updated"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search repositories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.github+json"
+              },
+              {
+                "key": "X-GitHub-Api-Version",
+                "value": "2022-11-28"
+              }
+            ],
+            "url": {
+              "raw": "{{github}}/search/repositories?q=tauri+react&per_page=5",
+              "query": [
+                {
+                  "key": "q",
+                  "value": "tauri+react"
+                },
+                {
+                  "key": "per_page",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Rate limit status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.github+json"
+              },
+              {
+                "key": "X-GitHub-Api-Version",
+                "value": "2022-11-28"
+              }
+            ],
+            "url": {
+              "raw": "{{github}}/rate_limit"
+            },
+            "description": "Doesn't count against the limit. Shows X-RateLimit-* headers."
+          }
+        },
+        {
+          "name": "Zen (burst-test me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.github+json"
+              },
+              {
+                "key": "X-GitHub-Api-Version",
+                "value": "2022-11-28"
+              }
+            ],
+            "url": {
+              "raw": "{{github}}/zen"
+            },
+            "description": "Unauthenticated limit is 60 req/hour: a burst of 70 will hit it (GitHub answers 403/429)."
+          }
+        },
+        {
+          "name": "Me (needs githubToken)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/vnd.github+json"
+              },
+              {
+                "key": "X-GitHub-Api-Version",
+                "value": "2022-11-28"
+              }
+            ],
+            "url": {
+              "raw": "{{github}}/user"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{githubToken}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
