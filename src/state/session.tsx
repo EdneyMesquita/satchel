@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { sendRequest, SendError, type HttpResponse } from "@/http/send";
+import { sendRequest, type HttpResponse } from "@/http/send";
 import { startBurst, type BurstConfig, type BurstResult } from "@/http/burst";
 import { mergedVariables, isResolved } from "@/variables";
 import { VARIABLE_PATTERN } from "@/variableTokens";
@@ -8,6 +8,7 @@ import type { SatchelRequest } from "@/types";
 import { useWorkspace } from "./workspace";
 import { publishResponse } from "@/features/response/popout/transport";
 import { snapshotOf } from "@/features/response/popout/snapshot";
+import { errorMessage } from "@/lib/errors";
 
 /**
  * Runtime, per-window state that is NOT saved in the workspace file:
@@ -199,7 +200,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         })
         .catch((err) => {
           if (controller.signal.aborted) return;
-          const message = err instanceof SendError || err instanceof Error ? err.message : "Request failed";
+          const message = errorMessage(err, "Request failed");
           setResponses((r) => ({ ...r, [requestId]: { kind: "error", message } }));
         })
         .finally(() => {

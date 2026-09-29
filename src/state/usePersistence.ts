@@ -8,6 +8,7 @@ import { basename, pickOpenLocation, pickSaveLocation, readWorkspaceFile, writeW
 import { createWorkspaceFolder, openWorkspaceFolder, readManagedFiles, saveWorkspaceFolder } from "@/folderStore";
 import { filesToWorkspace, isManagedPath, relativeInside, ROOT_FILE, WorkspaceFolderError, type FileMap, type Problem } from "@/folderFormat";
 import { isTauri } from "@/platform";
+import { errorMessage } from "@/lib/errors";
 import {
   fileMapsEqual,
   folderName,
@@ -71,7 +72,7 @@ export function initialWorkspace(): Workspace {
   return loadSource().kind === "cache" ? loadCache() : loadStored(MIRROR_KEY);
 }
 
-const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+const message = errorMessage;
 
 async function pickFolder(title: string): Promise<string | null> {
   if (!isTauri()) throw new Error("Workspace folders need the desktop app — run with `npm run tauri dev`.");
