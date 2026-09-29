@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type ViewMode = "pretty" | "tree" | "raw";
+export type ViewMode = "pretty" | "tree" | "table" | "raw";
 
 const KEY = "satchel.responseView";
 
 function load(): ViewMode {
   try {
     const v = localStorage.getItem(KEY);
-    if (v === "pretty" || v === "tree" || v === "raw") return v;
+    if (v === "pretty" || v === "tree" || v === "table" || v === "raw") return v;
   } catch {
     // storage unavailable
   }

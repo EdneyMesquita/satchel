@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { ChevronsDownUp, ChevronsUpDown, Copy, ExternalLink, Search } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Copy, ExternalLink, FileSpreadsheet, Search } from "lucide-react";
 import { Segmented } from "@/components/common/Segmented";
 import { MOD } from "@/components/common/Kbd";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +13,8 @@ import { parseJsonCached, type ParsedJson } from "./parseJson";
 import { SearchBar } from "./SearchBar";
 import { ToolbarButton } from "./ToolbarButton";
 import { useViewMode, type ViewMode } from "./useViewMode";
+import { findRecordLists } from "./table/tableModel";
+import { TableView, useTableState } from "./table/TableView";
 
 export interface ResponseViewerProps {
   /** pretty-printed JSON when isJson, else the text */
@@ -25,12 +27,12 @@ export interface ResponseViewerProps {
   onOpenWindow?: () => void;
 }
 
-const MODES_JSON: { value: ViewMode; label: string }[] = [
+const MODES: { value: ViewMode; label: string }[] = [
   { value: "pretty", label: "Pretty" },
   { value: "tree", label: "Tree" },
+  { value: "table", label: "Table" },
   { value: "raw", label: "Raw" },
 ];
-const MODES_TEXT = MODES_JSON.filter((m) => m.value !== "tree");
 const NO_RANGES: Range[] = [];
 const NOT_JSON: ParsedJson = { ok: false };
 /** Bodies above this size debounce the search while typing. */
@@ -41,7 +43,12 @@ export function ResponseViewer({ bodyText, rawText, isJson, variant, onOpenWindo
   const isWindow = variant === "window";
   const parsed = useMemo(() => (isJson ? parseJsonCached(bodyText) : NOT_JSON), [bodyText, isJson]);
   const [stored, setMode] = useViewMode();
-  const mode: ViewMode = stored === "tree" && !parsed.ok ? "pretty" : stored;
+  // Lists of records the Table view can show (the root array, or envelopes like { data: [...] }).
+  const lists = useMemo(() => (parsed.ok ? findRecordLists(parsed.value) : []), [parsed]);
+  const modes = MODES.filter((m) => (m.value === "tree" ? parsed.ok : m.value === "table" ? lists.length > 0 : true));
+  // A remembered mode this body can't show falls back: Table → Tree → Pretty.
+  const mode: ViewMode =
+    stored === "table" && !lists.length ? (parsed.ok ? "tree" : "pretty") : stored === "tree" && !parsed.ok ? "pretty" : stored;
   const text = mode === "raw" ? rawText : bodyText;
 
   // Search
@@ -54,15 +61,17 @@ export function ResponseViewer({ bodyText, rawText, isJson, variant, onOpenWindo
   const inputRef = useRef<HTMLInputElement>(null);
   const [focusTick, setFocusTick] = useState(0);
 
+  const table = useTableState(lists, mode === "table" ? query : "", effScope);
+
   const treeSearch = useMemo(
     () => (mode === "tree" && parsed.ok && query ? searchTree(parsed.value, query, effScope) : null),
     [mode, parsed, query, effScope],
   );
   const ranges = useMemo(
-    () => (mode !== "tree" && query ? searchText(text, query, effScope, isJson) : NO_RANGES),
+    () => (mode !== "tree" && mode !== "table" && query ? searchText(text, query, effScope, isJson) : NO_RANGES),
     [mode, text, query, effScope, isJson],
   );
-  const count = !query ? null : treeSearch ? treeSearch.matches.length : ranges.length;
+  const count = !query ? null : mode === "table" ? table.matches.length : treeSearch ? treeSearch.matches.length : ranges.length;
   const capped = treeSearch ? treeSearch.capped : ranges.length >= MATCH_CAP;
 
   // The current match resets whenever what's being searched changes.
@@ -74,7 +83,7 @@ export function ResponseViewer({ bodyText, rawText, isJson, variant, onOpenWindo
   };
 
   // A path typed in Pretty/Raw: offer to jump to it in the tree.
-  const pathInTree = mode !== "tree" && parsed.ok && query ? resolvePathQuery(parsed.value, query) : null;
+  const pathInTree = mode !== "tree" && mode !== "table" && parsed.ok && query ? resolvePathQuery(parsed.value, query) : null;
 
   const openSearch = useCallback(() => {
     setSearchOpen(true);
@@ -167,7 +176,7 @@ export function ResponseViewer({ bodyText, rawText, isJson, variant, onOpenWindo
             size="sm"
             value={mode}
             onChange={setMode}
-            options={parsed.ok ? MODES_JSON : MODES_TEXT}
+            options={modes}
             aria-label="View as"
             className="flex-none"
           />
@@ -187,6 +196,11 @@ export function ResponseViewer({ bodyText, rawText, isJson, variant, onOpenWindo
               </ToolbarButton>
             </>
           )}
+          {mode === "table" && (
+            <ToolbarButton label="Copy table as CSV" onClick={() => void copyWithToast(table.csv(), "Table copied as CSV.")}>
+              <FileSpreadsheet />
+            </ToolbarButton>
+          )}
           <ToolbarButton label="Copy body" onClick={() => void copyWithToast(text, "Body copied.")}>
             <Copy />
           </ToolbarButton>
@@ -199,7 +213,9 @@ export function ResponseViewer({ bodyText, rawText, isJson, variant, onOpenWindo
 
         {!isWindow && searchOpen && <div className="flex h-[34px] animate-fade-in items-center border-b border-line px-2">{searchBar}</div>}
 
-        {mode === "tree" && parsed.ok ? (
+        {mode === "table" && table.list ? (
+          <TableView key={bodyText} table={table} query={query} activeMatch={active} />
+        ) : mode === "tree" && parsed.ok ? (
           <JsonTree
             key={bodyText}
             ref={treeRef}
