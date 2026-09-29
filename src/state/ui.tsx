@@ -23,6 +23,10 @@ interface UiValue {
   forceFirstRun: boolean;
   setForceFirstRun: (v: boolean) => void;
 
+  /** "This folder isn't a workspace yet — create one?" for the chosen folder */
+  folderSetup: { root: string } | null;
+  setFolderSetup: (v: { root: string } | null) => void;
+
   /** Narrow windows: the sidebar becomes an overlay toggled from the header. */
   sidebarOpen: boolean;
   setSidebarOpen: (v: boolean) => void;
@@ -36,6 +40,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [postmanDialog, setPostmanDialog] = useState<{ files: File[] } | null>(null);
   const [forceFirstRun, setForceFirstRun] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [folderSetup, setFolderSetup] = useState<{ root: string } | null>(null);
 
   const value: UiValue = {
     paletteOpen,
@@ -54,6 +59,11 @@ export function UiProvider({ children }: { children: ReactNode }) {
     closePostmanDialog: () => setPostmanDialog(null),
     forceFirstRun,
     setForceFirstRun,
+    folderSetup,
+    setFolderSetup: (v) => {
+      if (v) setPaletteOpen(false);
+      setFolderSetup(v);
+    },
     sidebarOpen,
     setSidebarOpen,
   };

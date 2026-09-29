@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Download, File, Layers, Moon, Plus, Save, Sparkles, SquareTerminal, Sun, Zap } from "lucide-react";
+import { Download, File, FolderGit2, FolderOpen, FolderX, Layers, Moon, Plus, RefreshCw, Save, Sparkles, SquareTerminal, Sun, Zap } from "lucide-react";
 import { toast } from "sonner";
 import type { HttpMethod, SatchelRequest, TreeNode } from "@/types";
 import { EnvDot } from "@/components/common/EnvDot";
@@ -9,6 +9,8 @@ import { useSession, ENVIRONMENTS_TAB } from "@/state/session";
 import { useUi } from "@/state/ui";
 import { useAppActions } from "@/state/actions";
 import { useTheme } from "@/state/theme";
+import { folderName } from "@/state/sources";
+import { useWorkspaceActions } from "@/features/workspace/useWorkspaceActions";
 import type { Rankable } from "./rank";
 
 export interface PaletteItem extends Rankable {
@@ -42,6 +44,7 @@ export function usePaletteItems(): PaletteItem[] {
   const session = useSession();
   const ui = useUi();
   const actions = useAppActions();
+  const wsActions = useWorkspaceActions();
   const { theme, toggleTheme } = useTheme();
 
   const requests: PaletteItem[] = ws.workspace.collections.flatMap((collection) =>
@@ -83,8 +86,17 @@ export function usePaletteItems(): PaletteItem[] {
       if (activeRequestId) session.setRequestTab(activeRequestId, "rate");
       else toast("Open a request first, then burst-test it.");
     }),
-    command("open", "Open workspace file…", ".json", icon(File), () => void ws.openFile()),
-    command("save-as", "Save workspace as…", ".json", icon(Save), () => void ws.saveFileAs()),
+    command("open-folder", "Open workspace folder…", `${MOD}O`, icon(FolderOpen), () => void wsActions.openFolder()),
+    ...ws.recentFolders
+      .filter((root) => root !== ws.sourcePath)
+      .map((root) => command(`recent:${root}`, `Open ${folderName(root)}`, root, icon(FolderGit2), () => void wsActions.openFolder(root))),
+    ...(ws.source.kind === "folder"
+      ? [
+          command("reload", "Reload workspace from disk", "", icon(RefreshCw), () => void wsActions.reload()),
+          command("close-folder", "Close workspace folder", "", icon(FolderX), () => void ws.closeWorkspace()),
+        ]
+      : [command("save-folder", "Save as workspace folder…", "share with git", icon(Save), () => void wsActions.convertToFolder())]),
+    command("open", "Open .json workspace…", "older format", icon(File), () => void ws.openFile()),
     command(
       "theme",
       `Switch to ${theme === "dark" ? "light" : "dark"} theme`,

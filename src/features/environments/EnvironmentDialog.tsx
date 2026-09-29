@@ -166,10 +166,11 @@ function EnvironmentForm({ state, onClose }: { state: EnvironmentDialogState; on
 function SourcePreview({ source }: { source: Environment | undefined }) {
   if (!source) return <>Starts empty. Anything it doesn't define falls back to the collection, then globals.</>;
   const keys = source.variables.map((v) => v.key);
+  const anySecret = source.variables.some((v) => v.secret);
   return (
     <>
       Copies {keys.length} variable{keys.length === 1 ? "" : "s"} from {source.name}:{" "}
-      <span className="font-mono">{keys.join(", ") || "none"}</span>.
+      <span className="font-mono">{keys.join(", ") || "none"}</span>.{anySecret && " Secret values are copied only on this machine."}
     </>
   );
 }

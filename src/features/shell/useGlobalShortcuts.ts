@@ -3,6 +3,7 @@ import { useWorkspace } from "@/state/workspace";
 import { useSession, ENVIRONMENTS_TAB } from "@/state/session";
 import { useUi } from "@/state/ui";
 import { useAppActions } from "@/state/actions";
+import { useWorkspaceActions } from "@/features/workspace/useWorkspaceActions";
 
 const CURL = /^\s*curl\s/i;
 
@@ -17,23 +18,24 @@ function isEditable(el: Element | null): boolean {
 
 /**
  * App-wide keyboard shortcuts and "paste a curl anywhere":
- * ⌘K palette · ⌘↵ send · ⌘E cycle env · ⌘1–9 pick env · ⌘N new request · Esc closes the sidebar overlay.
+ * ⌘K palette · ⌘↵ send · ⌘E cycle env · ⌘1–9 pick env · ⌘N new request · ⌘O open folder · Esc closes the sidebar overlay.
  */
 export function useGlobalShortcuts() {
   const ws = useWorkspace();
   const session = useSession();
   const ui = useUi();
   const actions = useAppActions();
+  const wsActions = useWorkspaceActions();
 
   // The listeners are attached once; they read the latest state through this ref.
-  const latest = useRef({ ws, session, ui, actions });
+  const latest = useRef({ ws, session, ui, actions, wsActions });
   useLayoutEffect(() => {
-    latest.current = { ws, session, ui, actions };
+    latest.current = { ws, session, ui, actions, wsActions };
   });
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      const { ws, session, ui, actions } = latest.current;
+      const { ws, session, ui, actions, wsActions } = latest.current;
       const mod = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
 
@@ -65,6 +67,11 @@ export function useGlobalShortcuts() {
         if (!env) return;
         e.preventDefault();
         actions.switchEnvironment(env.id);
+        return;
+      }
+      if (mod && !e.shiftKey && !e.altKey && key === "o") {
+        e.preventDefault();
+        void wsActions.openFolder();
         return;
       }
       if (mod && !e.shiftKey && !e.altKey && key === "n") {

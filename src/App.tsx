@@ -17,6 +17,7 @@ import { EnvironmentDialog } from "@/features/environments/EnvironmentDialog";
 import { PostmanImportDialog } from "@/features/import/PostmanImportDialog";
 import { DropImportOverlay } from "@/features/import/DropImportOverlay";
 import { EmptyView } from "@/features/shell/EmptyView";
+import { FolderSetupDialog } from "@/features/workspace/FolderSetupDialog";
 import { cn } from "@/lib/utils";
 
 export default function App() {
@@ -90,6 +91,7 @@ function Shell() {
       <EnvironmentDialog />
       <PostmanImportDialog />
       <DropImportOverlay />
+      <FolderSetupDialog />
     </div>
   );
 }
