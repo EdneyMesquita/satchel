@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildBody, buildHeaders, buildUrl } from "./RequestEditor";
-import type { KeyValue, SatchelRequest } from "../types";
+import { buildBody, buildHeaders, buildUrl } from "./requestBuilder";
+import type { KeyValue, SatchelRequest } from "./types";
 
 // Regression coverage for a real bug: buildHeaders/buildUrl resolved
 // {{variables}} in the URL and raw body, but sent header values, Bearer

@@ -4,13 +4,27 @@ export type HttpMethod =
   | "PUT"
   | "PATCH"
   | "DELETE"
+  | "QUERY"
   | "HEAD"
   | "OPTIONS";
+
+export const HTTP_METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY", "HEAD", "OPTIONS"];
 
 export interface KeyValue {
   key: string;
   value: string;
   enabled: boolean;
+}
+
+// A multipart/form-data field. File fields keep a path on disk (read at send
+// time, so edits to the file are picked up) plus the name/size shown in the UI.
+// A file field imported from elsewhere may carry a fileName but no filePath —
+// the file lives on someone else's machine and has to be picked again.
+export interface FormField extends KeyValue {
+  type: "text" | "file";
+  fileName?: string;
+  filePath?: string;
+  fileSize?: number;
 }
 
 export type AuthConfig =
@@ -22,14 +36,20 @@ export type AuthConfig =
 export type RequestBody =
   | { mode: "none" }
   | { mode: "raw"; raw: string; language: "json" | "text" | "xml" | "html" }
-  | { mode: "urlencoded"; params: KeyValue[] };
+  | { mode: "urlencoded"; params: KeyValue[] }
+  | { mode: "formdata"; fields: FormField[] };
 
 export interface SatchelRequest {
   id: string;
   name: string;
   method: HttpMethod;
+  // The URL is the source of truth for the query string: enabled `params`
+  // are always reflected in it (see url.ts). Disabled params live only in
+  // `params`.
   url: string;
   params: KeyValue[];
+  // Values for `/:name` segments of the URL path, keyed by name.
+  pathVariables?: Record<string, string>;
   headers: KeyValue[];
   auth: AuthConfig;
   body: RequestBody;
@@ -61,6 +81,8 @@ export interface Environment {
   id: string;
   name: string;
   variables: KeyValue[];
+  // CSS color value (usually a var(--…) token) for the environment's dot.
+  color?: string;
 }
 
 export interface Workspace {
