@@ -27,6 +27,10 @@ interface UiValue {
   folderSetup: { root: string } | null;
   setFolderSetup: (v: { root: string } | null) => void;
 
+  /** The source control (git) panel in the header */
+  sourceControlOpen: boolean;
+  setSourceControlOpen: (v: boolean) => void;
+
   /** Narrow windows: the sidebar becomes an overlay toggled from the header. */
   sidebarOpen: boolean;
   setSidebarOpen: (v: boolean) => void;
@@ -41,6 +45,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [forceFirstRun, setForceFirstRun] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [folderSetup, setFolderSetup] = useState<{ root: string } | null>(null);
+  const [sourceControlOpen, setSourceControlOpen] = useState(false);
 
   const value: UiValue = {
     paletteOpen,
@@ -63,6 +68,11 @@ export function UiProvider({ children }: { children: ReactNode }) {
     setFolderSetup: (v) => {
       if (v) setPaletteOpen(false);
       setFolderSetup(v);
+    },
+    sourceControlOpen,
+    setSourceControlOpen: (v) => {
+      if (v) setPaletteOpen(false);
+      setSourceControlOpen(v);
     },
     sidebarOpen,
     setSidebarOpen,

@@ -1,5 +1,25 @@
 import type { ReactNode } from "react";
-import { Download, File, FolderGit2, FolderOpen, FolderX, Layers, Moon, Plus, RefreshCw, Save, Sparkles, SquareTerminal, Sun, Zap } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CloudDownload,
+  Download,
+  File,
+  FolderGit2,
+  FolderOpen,
+  FolderX,
+  GitBranch,
+  GitCommitHorizontal,
+  Layers,
+  Moon,
+  Plus,
+  RefreshCw,
+  Save,
+  Sparkles,
+  SquareTerminal,
+  Sun,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { HttpMethod, SatchelRequest, TreeNode } from "@/types";
 import { EnvDot } from "@/components/common/EnvDot";
@@ -9,8 +29,11 @@ import { useSession, ENVIRONMENTS_TAB } from "@/state/session";
 import { useUi } from "@/state/ui";
 import { useAppActions } from "@/state/actions";
 import { useTheme } from "@/state/theme";
+import { useGit } from "@/state/git";
 import { folderName } from "@/state/sources";
 import { useWorkspaceActions } from "@/features/workspace/useWorkspaceActions";
+import { plural } from "@/features/git/model";
+import { requestCommitFocus, SOURCE_CONTROL_KBD } from "@/features/git/panelRequests";
 import type { Rankable } from "./rank";
 
 export interface PaletteItem extends Rankable {
@@ -46,6 +69,7 @@ export function usePaletteItems(): PaletteItem[] {
   const actions = useAppActions();
   const wsActions = useWorkspaceActions();
   const { theme, toggleTheme } = useTheme();
+  const git = useGit();
 
   const requests: PaletteItem[] = ws.workspace.collections.flatMap((collection) =>
     collectRequests(collection.items).map((request) => ({
@@ -73,6 +97,52 @@ export function usePaletteItems(): PaletteItem[] {
     run,
   });
 
+  // Git: only for a workspace folder, and only what applies to it right now.
+  const status = git.status;
+  const gitCommands: PaletteItem[] =
+    ws.source.kind !== "folder" || !git.available || !git.repo
+      ? []
+      : !git.repo.isRepo
+        ? [command("git-init", "Initialize git repository", "git init", icon(GitBranch), () => void git.init())]
+        : [
+            command("git-panel", "Source control…", SOURCE_CONTROL_KBD, icon(GitBranch), () => ui.setSourceControlOpen(true)),
+            command(
+              "git-commit",
+              "Git: Commit…",
+              git.changes.length ? plural(git.changes.length, "change") : "no changes",
+              icon(GitCommitHorizontal),
+              () => {
+                requestCommitFocus();
+                ui.setSourceControlOpen(true);
+              },
+            ),
+            ...(status?.upstream
+              ? [
+                  command(
+                    "git-pull",
+                    "Git: Pull",
+                    status.behind ? `↓${status.behind} from ${status.upstream}` : status.upstream,
+                    icon(ArrowDownToLine),
+                    () => void git.pull(),
+                  ),
+                ]
+              : []),
+            ...(status?.branch && status.commit
+              ? [
+                  status.upstream
+                    ? command(
+                        "git-push",
+                        "Git: Push",
+                        status.ahead ? `↑${status.ahead} to ${status.upstream}` : status.upstream,
+                        icon(ArrowUpFromLine),
+                        () => void git.push(),
+                      )
+                    : command("git-push", "Git: Publish branch", status.branch, icon(ArrowUpFromLine), () => void git.push()),
+                ]
+              : []),
+            command("git-fetch", "Git: Fetch", "download new commits", icon(CloudDownload), () => void git.fetch()),
+          ];
+
   const commands: PaletteItem[] = [
     ...ws.workspace.environments
       .filter((e) => e.id !== ws.workspace.activeEnvironmentId)
@@ -96,6 +166,7 @@ export function usePaletteItems(): PaletteItem[] {
           command("close-folder", "Close workspace folder", "", icon(FolderX), () => void ws.closeWorkspace()),
         ]
       : [command("save-folder", "Save as workspace folder…", "share with git", icon(Save), () => void wsActions.convertToFolder())]),
+    ...gitCommands,
     command("open", "Open .json workspace…", "older format", icon(File), () => void ws.openFile()),
     command(
       "theme",

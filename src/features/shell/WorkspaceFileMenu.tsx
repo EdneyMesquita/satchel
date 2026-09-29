@@ -7,6 +7,8 @@ import { folderName } from "@/state/sources";
 import { cn } from "@/lib/utils";
 import { ProblemsButton } from "@/features/workspace/ProblemsButton";
 import { useWorkspaceActions } from "@/features/workspace/useWorkspaceActions";
+import { GitMenuItems } from "@/features/git/GitMenuItems";
+import { SourceControl } from "@/features/git/SourceControl";
 import { MenuContent, MenuHead, MenuItem, MenuSeparator, MenuSub, MenuSubContent, MenuSubTrigger } from "./menu";
 
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -56,7 +58,12 @@ export function WorkspaceFileMenu() {
             <SaveIndicator state={ws.saveState} />
           </button>
         </DropdownMenuTrigger>
-        <MenuContent align="start" className="max-w-[min(480px,calc(100vw-16px))]">
+        <MenuContent
+          align="start"
+          className="max-w-[min(480px,calc(100vw-16px))]"
+          // "Source control…" opens a popover: handing focus back to this trigger would close it again.
+          onCloseAutoFocus={(e) => ui.sourceControlOpen && e.preventDefault()}
+        >
           <MenuHead className="truncate" title={ws.sourcePath ?? undefined}>
             {ws.sourcePath ?? "Not saved yet · kept in the app"}
           </MenuHead>
@@ -89,6 +96,7 @@ export function WorkspaceFileMenu() {
               <MenuItem onSelect={() => void actions.reveal()}>Reveal in file manager</MenuItem>
             </>
           )}
+          <GitMenuItems />
           <MenuSeparator />
           <MenuItem onSelect={() => ui.openPostmanDialog()}>Import Postman collection…</MenuItem>
           <MenuItem onSelect={() => void ws.openFile()} sub="older format">
@@ -103,6 +111,7 @@ export function WorkspaceFileMenu() {
         </MenuContent>
       </DropdownMenu>
       <ProblemsButton className="max-[820px]:hidden" />
+      <SourceControl />
     </div>
   );
 }
