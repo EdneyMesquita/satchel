@@ -10,8 +10,20 @@ import { cn } from "@/lib/utils";
 import { CollectionTree } from "./CollectionTree";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
 import { NewMenu } from "./NewMenu";
+import { SidebarResizer } from "./SidebarResizer";
 import { IconButton } from "@/features/shell/IconButton";
 import { variableNameCount, type TreeRowModel } from "./treeRows";
+
+/**
+ * The tree's scroller: a thin token-colored scrollbar in a reserved gutter, so it never covers the
+ * rows' trailing "…"/"+" buttons (WebKitGTK/macOS would otherwise overlay it on top of them).
+ * Standard properties for Firefox/Chromium ≥121 (WebView2); ::-webkit-scrollbar for WebKit, where
+ * styling it also turns an overlay scrollbar into a classic one that takes its own space.
+ */
+const TREE_SCROLL =
+  "[scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:var(--line2)_transparent] " +
+  "[&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent " +
+  "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-line2 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-fg3";
 
 type PendingDelete = { kind: "collection" | "folder"; collectionId: string; id: string; name: string; count: number };
 
@@ -60,7 +72,7 @@ export function Sidebar() {
     <aside
       aria-label="Collections"
       className={cn(
-        "grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] border-r border-line bg-bg0 max-[820px]:hidden",
+        "relative grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] border-r border-line bg-bg0 max-[820px]:hidden",
         ui.sidebarOpen &&
           "max-[820px]:fixed max-[820px]:top-11 max-[820px]:bottom-6 max-[820px]:left-0 max-[820px]:z-40 max-[820px]:grid max-[820px]:w-[min(280px,85vw)] max-[820px]:shadow-pop",
       )}
@@ -101,7 +113,7 @@ export function Sidebar() {
         />
       </div>
 
-      <div className="min-h-0 overflow-auto pt-0.5 pb-2.5">
+      <div data-tree-scroll="" className={cn("min-h-0 overflow-auto pt-0.5 pb-2.5", TREE_SCROLL)}>
         <CollectionTree
           filter={filter}
           renamingId={renamingId}
@@ -125,6 +137,8 @@ export function Sidebar() {
           <span className="text-[11px] text-fg3">{variableNameCount(ws.workspace)}</span>
         </button>
       </div>
+
+      <SidebarResizer />
 
       <ConfirmDeleteDialog
         target={pendingDelete}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { countRequests, resolveVariables } from "./collectionTree";
-import type { TreeNode } from "./types";
+import { countRequests, locateNode, moveCollection, moveNode, resolveVariables, siblingStep } from "./collectionTree";
+import type { Collection, TreeNode } from "./types";
 
 describe("resolveVariables", () => {
   it("substitutes a simple {{variable}}", () => {
@@ -57,5 +57,170 @@ describe("countRequests", () => {
   it("is 0 for an empty tree or a tree of only empty folders", () => {
     expect(countRequests([])).toBe(0);
     expect(countRequests([{ type: "folder", id: "f", name: "Empty", children: [] }])).toBe(0);
+  });
+});
+
+// ---- moving nodes ---------------------------------------------------------------------------
+
+function folder(id: string, children: TreeNode[]): TreeNode {
+  return { type: "folder", id, name: id, children };
+}
+
+function collection(id: string, items: TreeNode[]): Collection {
+  return { id, name: id, variables: [], items };
+}
+
+/** Compact shape of a tree: ids, with folders as [id, children]. */
+type Shape = string | [string, Shape[]];
+function shape(items: TreeNode[]): Shape[] {
+  return items.map((n) => (n.type === "request" ? n.id : [n.id, shape(n.children)]));
+}
+function shapes(cols: Collection[]): Record<string, Shape[]> {
+  return Object.fromEntries(cols.map((c) => [c.id, shape(c.items)]));
+}
+
+// A: r1, r2, r3, F1[ r4, F2[ r5 ] ]      B: r6, F3[]
+function fixture(): Collection[] {
+  return [
+    collection("A", [
+      requestNode("r1"),
+      requestNode("r2"),
+      requestNode("r3"),
+      folder("F1", [requestNode("r4"), folder("F2", [requestNode("r5")])]),
+    ]),
+    collection("B", [requestNode("r6"), folder("F3", [])]),
+  ];
+}
+
+describe("locateNode", () => {
+  it("finds the collection, parent folder and index of a node at any depth", () => {
+    const cols = fixture();
+    expect(locateNode(cols, "r2")).toEqual({ collectionId: "A", parentFolderId: null, index: 1 });
+    expect(locateNode(cols, "r5")).toEqual({ collectionId: "A", parentFolderId: "F2", index: 0 });
+    expect(locateNode(cols, "F3")).toEqual({ collectionId: "B", parentFolderId: null, index: 1 });
+    expect(locateNode(cols, "nope")).toBeUndefined();
+  });
+});
+
+describe("moveNode", () => {
+  it("moves a node down within the same parent (the gap index counts the node itself)", () => {
+    const out = moveNode(fixture(), "r1", { collectionId: "A", parentFolderId: null, index: 3 });
+    expect(shape(out[0].items)).toEqual(["r2", "r3", "r1", ["F1", ["r4", ["F2", ["r5"]]]]]);
+  });
+
+  it("moves a node up within the same parent", () => {
+    const out = moveNode(fixture(), "r3", { collectionId: "A", parentFolderId: null, index: 0 });
+    expect(shape(out[0].items)).toEqual(["r3", "r1", "r2", ["F1", ["r4", ["F2", ["r5"]]]]]);
+  });
+
+  it("moves to the very end of the same parent", () => {
+    const out = moveNode(fixture(), "r1", { collectionId: "A", parentFolderId: null, index: 4 });
+    expect(shape(out[0].items)).toEqual(["r2", "r3", ["F1", ["r4", ["F2", ["r5"]]]], "r1"]);
+  });
+
+  it("moves a request into a nested folder, at the given position", () => {
+    const out = moveNode(fixture(), "r2", { collectionId: "A", parentFolderId: "F2", index: 0 });
+    expect(shape(out[0].items)).toEqual(["r1", "r3", ["F1", ["r4", ["F2", ["r2", "r5"]]]]]);
+  });
+
+  it("moves a request out of a folder to the collection root", () => {
+    const out = moveNode(fixture(), "r5", { collectionId: "A", parentFolderId: null, index: 1 });
+    expect(shape(out[0].items)).toEqual(["r1", "r5", "r2", "r3", ["F1", ["r4", ["F2", []]]]]);
+  });
+
+  it("moves a request into another collection (appended to an empty folder)", () => {
+    const out = moveNode(fixture(), "r1", { collectionId: "B", parentFolderId: "F3", index: 0 });
+    expect(shapes(out)).toEqual({
+      A: ["r2", "r3", ["F1", ["r4", ["F2", ["r5"]]]]],
+      B: ["r6", ["F3", ["r1"]]],
+    });
+  });
+
+  it("moves a whole folder, with its contents, across collections", () => {
+    const out = moveNode(fixture(), "F1", { collectionId: "B", parentFolderId: null, index: 0 });
+    expect(shapes(out)).toEqual({
+      A: ["r1", "r2", "r3"],
+      B: [["F1", ["r4", ["F2", ["r5"]]]], "r6", ["F3", []]],
+    });
+  });
+
+  it("moves a folder up into its grandparent", () => {
+    const out = moveNode(fixture(), "F2", { collectionId: "A", parentFolderId: null, index: 0 });
+    expect(shape(out[0].items)).toEqual([["F2", ["r5"]], "r1", "r2", "r3", ["F1", ["r4"]]]);
+  });
+
+  it("keeps the moved node object (and its id) intact", () => {
+    const before = fixture();
+    const r4 = (before[0].items[3] as Extract<TreeNode, { type: "folder" }>).children[0];
+    const out = moveNode(before, "r4", { collectionId: "B", parentFolderId: null, index: 2 });
+    expect(out[1].items[2]).toBe(r4);
+  });
+
+  it("refuses to move a folder into itself or one of its descendants", () => {
+    const cols = fixture();
+    expect(moveNode(cols, "F1", { collectionId: "A", parentFolderId: "F1", index: 0 })).toBe(cols);
+    expect(moveNode(cols, "F1", { collectionId: "A", parentFolderId: "F2", index: 0 })).toBe(cols);
+  });
+
+  it("refuses unknown nodes, collections and parent folders (or a request used as a parent)", () => {
+    const cols = fixture();
+    expect(moveNode(cols, "nope", { collectionId: "A", parentFolderId: null, index: 0 })).toBe(cols);
+    expect(moveNode(cols, "r1", { collectionId: "Z", parentFolderId: null, index: 0 })).toBe(cols);
+    expect(moveNode(cols, "r1", { collectionId: "A", parentFolderId: "F3", index: 0 })).toBe(cols); // F3 is in B
+    expect(moveNode(cols, "r1", { collectionId: "A", parentFolderId: "r2", index: 0 })).toBe(cols);
+  });
+
+  it("is a no-op (same array) when the node would land where it already is", () => {
+    const cols = fixture();
+    expect(moveNode(cols, "r2", { collectionId: "A", parentFolderId: null, index: 1 })).toBe(cols); // gap before itself
+    expect(moveNode(cols, "r2", { collectionId: "A", parentFolderId: null, index: 2 })).toBe(cols); // gap after itself
+    expect(moveNode(cols, "r5", { collectionId: "A", parentFolderId: "F2", index: 1 })).toBe(cols);
+  });
+
+  it("clamps an out-of-range index", () => {
+    const out = moveNode(fixture(), "r6", { collectionId: "A", parentFolderId: "F1", index: 99 });
+    expect(shape(out[0].items)[3]).toEqual(["F1", ["r4", ["F2", ["r5"]], "r6"]]);
+  });
+
+  it("does not mutate its input", () => {
+    const cols = fixture();
+    const snapshot = JSON.stringify(cols);
+    moveNode(cols, "r1", { collectionId: "B", parentFolderId: "F3", index: 0 });
+    moveNode(cols, "F2", { collectionId: "A", parentFolderId: null, index: 0 });
+    expect(JSON.stringify(cols)).toBe(snapshot);
+  });
+});
+
+describe("siblingStep", () => {
+  it("gives the target one step up or down among the siblings", () => {
+    const cols = fixture();
+    expect(moveNode(cols, "r2", siblingStep(cols, "r2", -1)!)[0].items.map((n) => n.id)).toEqual(["r2", "r1", "r3", "F1"]);
+    expect(moveNode(cols, "r2", siblingStep(cols, "r2", 1)!)[0].items.map((n) => n.id)).toEqual(["r1", "r3", "r2", "F1"]);
+  });
+
+  it("is undefined at the edges", () => {
+    const cols = fixture();
+    expect(siblingStep(cols, "r1", -1)).toBeUndefined();
+    expect(siblingStep(cols, "F1", 1)).toBeUndefined();
+    expect(siblingStep(cols, "r5", 1)).toBeUndefined();
+    expect(siblingStep(cols, "nope", 1)).toBeUndefined();
+  });
+});
+
+describe("moveCollection", () => {
+  const three = () => [collection("A", []), collection("B", []), collection("C", [])];
+  const ids = (cols: Collection[]) => cols.map((c) => c.id);
+
+  it("moves a collection down or up (gap indexes)", () => {
+    expect(ids(moveCollection(three(), "A", 3))).toEqual(["B", "C", "A"]);
+    expect(ids(moveCollection(three(), "A", 2))).toEqual(["B", "A", "C"]);
+    expect(ids(moveCollection(three(), "C", 0))).toEqual(["C", "A", "B"]);
+  });
+
+  it("is a no-op (same array) for its own position or an unknown id", () => {
+    const cols = three();
+    expect(moveCollection(cols, "B", 1)).toBe(cols);
+    expect(moveCollection(cols, "B", 2)).toBe(cols);
+    expect(moveCollection(cols, "Z", 0)).toBe(cols);
   });
 });

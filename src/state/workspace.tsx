@@ -6,9 +6,12 @@ import {
   createFolder,
   createRequest,
   findRequest,
+  moveCollection,
+  moveNode,
   removeNode,
   renameNode,
   updateRequestInCollections,
+  type MoveTarget,
 } from "@/collectionTree";
 import { normalizeRequest } from "@/url";
 import { setVariable, type VariableContext } from "@/variables";
@@ -70,6 +73,10 @@ interface WorkspaceValue extends Persistence {
   renameNode: (collectionId: string, nodeId: string, name: string) => void;
   deleteCollection: (collectionId: string) => void;
   deleteNode: (collectionId: string, nodeId: string) => void;
+  /** Move a request or folder (see collectionTree.moveNode; invalid moves are ignored). */
+  moveNode: (nodeId: string, target: MoveTarget) => void;
+  /** Reorder collections; toIndex is a gap in the current list (0…length). */
+  moveCollection: (collectionId: string, toIndex: number) => void;
 
   // environments & variables
   setActiveEnvironment: (environmentId: string | null) => void;
@@ -198,6 +205,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     deleteCollection: (collectionId) => setCollections((cols) => cols.filter((c) => c.id !== collectionId)),
     deleteNode: (collectionId, nodeId) =>
       setCollections((cols) => cols.map((c) => (c.id === collectionId ? { ...c, items: removeNode(c.items, nodeId) } : c))),
+    // No-op moves keep the same workspace object, so nothing is marked unsaved.
+    moveNode: (nodeId, target) =>
+      setWorkspace((w) => {
+        const collections = moveNode(w.collections, nodeId, target);
+        return collections === w.collections ? w : { ...w, collections };
+      }),
+    moveCollection: (collectionId, toIndex) =>
+      setWorkspace((w) => {
+        const collections = moveCollection(w.collections, collectionId, toIndex);
+        return collections === w.collections ? w : { ...w, collections };
+      }),
 
     setActiveEnvironment: (environmentId) => setWorkspace((w) => ({ ...w, activeEnvironmentId: environmentId })),
     createEnvironment: ({ name, color, copyFromId, activate }) => {

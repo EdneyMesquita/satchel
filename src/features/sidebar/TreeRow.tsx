@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { RenameInput } from "./RenameInput";
 import type { TreeRowModel } from "./treeRows";
 
-export type RowAction = "new-request" | "new-folder" | "rename" | "delete";
+export type RowAction = "new-request" | "new-folder" | "copy-curl" | "copy-curl-raw" | "rename" | "delete";
 
 interface TreeRowProps {
   row: TreeRowModel;
@@ -20,10 +20,26 @@ interface TreeRowProps {
   onActivate: () => void;
   onRenameDone: (name: string | null) => void;
   onAction: (action: RowAction) => void;
+  /** A drag hovers the middle of this folder/collection: the item would go inside */
+  dropInside?: boolean;
+  /** This row is being dragged */
+  dragging?: boolean;
 }
 
 /** One 28px line of the collection tree: collection, folder or request. */
-export function TreeRow({ row, selected, tabStop, renaming, menuOpen, onMenuOpenChange, onActivate, onRenameDone, onAction }: TreeRowProps) {
+export function TreeRow({
+  row,
+  selected,
+  tabStop,
+  renaming,
+  menuOpen,
+  onMenuOpenChange,
+  onActivate,
+  onRenameDone,
+  onAction,
+  dropInside,
+  dragging,
+}: TreeRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
   // Set when the menu closes because of a choice or an outside click: then focus shouldn't jump back to the row.
   const skipRefocus = useRef(false);
@@ -55,6 +71,8 @@ export function TreeRow({ row, selected, tabStop, renaming, menuOpen, onMenuOpen
         "group relative flex h-7 cursor-pointer items-center gap-1.5 pr-1.5 whitespace-nowrap text-fg2 select-none hover:bg-bg2 hover:text-fg focus-visible:[outline-offset:-1.5px]",
         selected &&
           "bg-bg3 text-fg hover:bg-bg3 before:absolute before:top-[5px] before:bottom-[5px] before:left-0 before:w-0.5 before:rounded-[2px] before:bg-brass",
+        dropInside && "bg-brass-soft text-fg shadow-[inset_0_0_0_1px_var(--brass)] hover:bg-brass-soft",
+        dragging && "opacity-45",
       )}
     >
       {isRequest ? (
@@ -110,6 +128,13 @@ export function TreeRow({ row, selected, tabStop, renaming, menuOpen, onMenuOpen
               <>
                 <MenuItem onSelect={() => choose("new-request")}>New request here</MenuItem>
                 <MenuItem onSelect={() => choose("new-folder")}>New folder here</MenuItem>
+                <MenuSeparator />
+              </>
+            )}
+            {isRequest && (
+              <>
+                <MenuItem onSelect={() => choose("copy-curl")}>Copy as cURL</MenuItem>
+                <MenuItem onSelect={() => choose("copy-curl-raw")}>{"Copy as cURL (with {{variables}})"}</MenuItem>
                 <MenuSeparator />
               </>
             )}
