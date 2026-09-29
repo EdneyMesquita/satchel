@@ -42,7 +42,7 @@ on:
         type: boolean
         default: false
       branch:
-        description: Or test-build a branch of this repository instead (never submitted)
+        description: Or build a branch of this repository instead (never submitted by the workflow)
         required: false
   pull_request:
     paths:
@@ -90,7 +90,8 @@ jobs:
             echo "submit=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # A test build of unreleased code: its version may already be in the Store, so it's never submitted.
+          # A build of unreleased code, to try it or to submit it by hand: the workflow never submits it,
+          # since its version doesn't come from a release and may already be in the Store.
           if [ "$EVENT" = workflow_dispatch ] && [ -n "$INPUT_BRANCH" ]; then
             gh api "repos/$GITHUB_REPOSITORY/branches/$INPUT_BRANCH" --silent
             {
@@ -100,7 +101,7 @@ jobs:
               echo "tag=$INPUT_BRANCH"
               echo "test=true"
             } >> "$GITHUB_OUTPUT"
-            echo "Test build of $GITHUB_REPOSITORY $INPUT_BRANCH"
+            echo "Build of $GITHUB_REPOSITORY $INPUT_BRANCH"
             exit 0
           fi
 
@@ -215,7 +216,7 @@ jobs:
       - name: Upload the package
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PLACEHOLDER == 'true' && 'msix-placeholder-identity-not-for-upload' || needs.resolve.outputs.test == 'true' && 'msix-test-build-not-for-upload' || 'msix-microsoft-store' }}
+          name: ${{ env.PLACEHOLDER == 'true' && 'msix-placeholder-identity-not-for-upload' || needs.resolve.outputs.test == 'true' && 'msix-branch-build' || 'msix-microsoft-store' }}
           path: ${{ steps.pack.outputs.package }}
           if-no-files-found: error
 

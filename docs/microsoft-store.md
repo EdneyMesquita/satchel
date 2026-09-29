@@ -25,7 +25,7 @@ Satchel goes to the Store as an **MSIX** package. The Store signs MSIX packages 
 
 Publishing a GitHub release builds its package. You can also build one at any time from *Actions* > *Microsoft Store* > *Run workflow*: leave *tag* empty for the latest release, and leave *submit* unchecked to only build. When the run finishes, download the **msix-microsoft-store** artifact: a zip holding `Satchel_X.Y.Z.0_x64.msix`.
 
-To try code that isn't released yet, fill in *branch* instead: it builds that branch of this repository as **msix-test-build-not-for-upload**, which is never submitted (its version may already be in the Store). Installing it takes a signature, see *Good to know*.
+To package code that isn't released yet, fill in *branch* instead (e.g. `master`): it builds that branch of this repository as **msix-branch-build**. The workflow never submits it, but you can upload it in Partner Center by hand, as long as its version is higher than the one in the Store. To install it locally first, it needs a signature (see *Good to know*).
 
 Two versioning rules apply:
 
