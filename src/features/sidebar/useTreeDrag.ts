@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type R
 import type { Collection } from "@/types";
 import { ROW_INDENT, ROW_PAD, resolveDrop, zoneFor, type DragSource, type Drop } from "./dropTarget";
 import type { TreeRowModel } from "./treeRows";
+import { rowAt } from "./treeWindow";
 
 const THRESHOLD = 4; // px before a press becomes a drag (clicks, double-clicks, menus keep working)
 const EXPAND_DELAY = 600; // ms hovering a closed folder/collection before it opens
@@ -9,7 +10,8 @@ const EDGE = 32; // px from the scroller's top/bottom where auto-scroll kicks in
 const MAX_SPEED = 14; // px per frame
 
 interface Options {
-  treeRef: RefObject<HTMLDivElement | null>;
+  /** The rows' container: row i's top is i × ROW_H below its top, mounted or not */
+  listRef: RefObject<HTMLDivElement | null>;
   rows: TreeRowModel[];
   collections: Collection[];
   /** No dragging (the tree is filtered: the visible order isn't the real one) */
@@ -35,7 +37,7 @@ const sameDrop = (a: Drop | null, b: Drop | null) => JSON.stringify(a) === JSON.
  * Drag-and-drop for the collection tree with mouse events — not HTML5 DnD, which Tauri's native
  * file-drop handler breaks inside the webview on Windows.
  */
-export function useTreeDrag({ treeRef, rows, collections, disabled, onDisabledAttempt, onExpand, onDrop }: Options): TreeDrag {
+export function useTreeDrag({ listRef, rows, collections, disabled, onDisabledAttempt, onExpand, onDrop }: Options): TreeDrag {
   const [source, setSource] = useState<DragSource | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
@@ -74,7 +76,7 @@ export function useTreeDrag({ treeRef, rows, collections, disabled, onDisabledAt
     let expandTimer = 0;
     let scrollFrame = 0;
 
-    const scroller = () => treeRef.current?.closest<HTMLElement>("[data-tree-scroll]") ?? null;
+    const scroller = () => listRef.current?.closest<HTMLElement>("[data-tree-scroll]") ?? null;
 
     const clearExpand = () => {
       window.clearTimeout(expandTimer);
@@ -88,31 +90,21 @@ export function useTreeDrag({ treeRef, rows, collections, disabled, onDisabledAt
     };
 
     const resolveAt = () => {
-      const tree = treeRef.current;
+      const list = listRef.current;
       const box = scroller()?.getBoundingClientRect();
-      if (!tree || !box || pointer.x < box.left || pointer.x > box.right || pointer.y < box.top || pointer.y > box.bottom) {
+      if (!list || !box || pointer.x < box.left || pointer.x > box.right || pointer.y < box.top || pointer.y > box.bottom) {
         clearExpand();
         setCurrent(null);
         return;
       }
       const { rows, collections } = latest.current;
-      const els = tree.querySelectorAll<HTMLElement>("[data-tree-row]");
-      if (els.length === 0) return;
-      // The row under the pointer; below the last row counts as that row's bottom edge.
-      let el = els[els.length - 1];
-      let rel = 1;
-      for (const candidate of els) {
-        const r = candidate.getBoundingClientRect();
-        if (pointer.y < r.bottom) {
-          el = candidate;
-          rel = Math.max(0, Math.min(1, (pointer.y - r.top) / r.height));
-          break;
-        }
-      }
-      const index = rows.findIndex((r) => r.id === el.dataset.rowId);
+      // The row under the pointer, from its position alone: most rows aren't mounted (see treeWindow).
+      const listBox = list.getBoundingClientRect();
+      const hit = rowAt(pointer.y - listBox.top, rows.length);
+      if (!hit) return;
+      const { index, rel } = hit;
       const hovered = rows[index];
-      if (!hovered) return;
-      const pointerDepth = Math.floor((pointer.x - tree.getBoundingClientRect().left - ROW_PAD) / ROW_INDENT);
+      const pointerDepth = Math.floor((pointer.x - listBox.left - ROW_PAD) / ROW_INDENT);
       setCurrent(resolveDrop(collections, rows, dragged, index, rel, pointerDepth));
 
       // Hovering the middle of a closed folder/collection opens it after a moment.

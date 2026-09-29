@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { countRequests } from "@/collectionTree";
 import type { TreeNode } from "@/types";
 import { useWorkspace } from "@/state/workspace";
-import { useSession } from "@/state/session";
+import { useSessionCore } from "@/state/session";
 import { useUi } from "@/state/ui";
 import { cn } from "@/lib/utils";
 import { CollectionTree } from "./CollectionTree";
@@ -40,7 +40,7 @@ function findFolderChildren(items: TreeNode[], id: string): TreeNode[] | undefin
 /** Left column: filter, "+" menu, collection tree, environments shortcut. On narrow windows it's an overlay. */
 export function Sidebar() {
   const ws = useWorkspace();
-  const session = useSession();
+  const session = useSessionCore();
   const ui = useUi();
   const [filter, setFilter] = useState("");
   const [renamingId, setRenamingId] = useState<string | null>(null);
