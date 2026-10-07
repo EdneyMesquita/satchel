@@ -1,7 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { sendRequest, type HttpResponse } from "@/http/send";
+import {
+  applyScriptRequest,
+  contextWithChanges,
+  MAX_SCRIPT_BODY,
+  scriptInput,
+  tagged,
+  type ConsoleEntry,
+} from "@/scripts/pipeline";
+import { runScript } from "@/scripts/client";
+import type { VariableChange } from "@/scripts/types";
 import { startBurst, type BurstConfig, type BurstResult } from "@/http/burst";
-import { mergedVariables, isResolved } from "@/variables";
+import { mergedVariables, isResolved, type VariableContext } from "@/variables";
 import { VARIABLE_PATTERN } from "@/variableTokens";
 import { pathParamNames } from "@/url";
 import type { SatchelRequest } from "@/types";
@@ -19,12 +29,24 @@ import { mergeBySeq } from "@/features/burst/burstMath";
 export const ENVIRONMENTS_TAB = "@environments";
 export type TabId = string; // a request id, or ENVIRONMENTS_TAB
 
-export type RequestTab = "params" | "headers" | "body" | "auth" | "rate";
-export type ResponseTab = "body" | "headers" | "burst";
+export type RequestTab = "params" | "headers" | "body" | "auth" | "scripts" | "rate";
+export type ResponseTab = "body" | "headers" | "console" | "burst";
+
+/** What the request's scripts did on this send. */
+export interface ScriptRun {
+  /** logs and variable writes, pre-request first */
+  console: ConsoleEntry[];
+  /** the body as received, when the post-response script replaced it */
+  originalBody?: string;
+  /** the post-response script failed: the body is shown as received */
+  postError?: { message: string; line: number | null };
+}
 
 export type ResponseEntry =
-  | { kind: "ok"; response: HttpResponse }
-  | { kind: "error"; message: string };
+  | { kind: "ok"; response: HttpResponse; script?: ScriptRun }
+  | { kind: "error"; message: string; script?: ScriptRun }
+  /** the pre-request script failed, so nothing was sent */
+  | { kind: "script-error"; message: string; line: number | null; script: ScriptRun };
 
 export interface BurstRun {
   config: BurstConfig;
@@ -303,42 +325,117 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const ws = wsRef.current;
     const loc = ws.findRequest(requestId);
     if (!loc) return;
-    const ctx = ws.variableContext(requestId);
-    const missing = unresolvedVariables(loc.request, (k) => isResolved(k, ctx));
-    if (missing.length && !opts?.force) {
-      setBlocker({ requestId, missingVariables: missing });
-      return;
-    }
-    const emptyPath = pathParamNames(loc.request.url).filter((n) => !loc.request.pathVariables?.[n]);
-    if (emptyPath.length && !opts?.force) {
-      setRequestTabs((m) => ({ ...m, [requestId]: "params" }));
-      setResponses((r) => ({ ...r, [requestId]: { kind: "error", message: `Path parameter :${emptyPath[0]} needs a value.` } }));
-      return;
-    }
+    const saved = loc.request;
+    const scripts = saved.scripts;
+    const preCode = scripts?.preRequest?.trim() ? scripts.preRequest : "";
+    const postCode = scripts?.postResponse?.trim() ? scripts.postResponse : "";
+    const done = (controller: AbortController) => {
+      if (aborts.current[requestId] === controller) {
+        delete aborts.current[requestId];
+        setSending((s) => ({ ...s, [requestId]: false }));
+      }
+    };
+
+    // Variable writes from a script land in the workspace (secrets keep going to the keychain)
+    // and in what this send resolves with.
+    const envId = ws.variableContext(requestId).environment?.id;
+    const keep = (changes: readonly VariableChange[]) => {
+      for (const c of changes) {
+        if (c.scope === "globals") wsRef.current.setVariableIn({ scope: "globals" }, c.key, c.value);
+        else if (envId) wsRef.current.setVariableIn({ scope: "environment", id: envId }, c.key, c.value);
+      }
+    };
+
+    // Without scripts, the checks run before anything starts (as they always have).
+    const check = (request: SatchelRequest, ctx: VariableContext, consoleSoFar: ConsoleEntry[]): boolean => {
+      const missing = unresolvedVariables(request, (k) => isResolved(k, ctx));
+      if (missing.length && !opts?.force) {
+        setBlocker({ requestId, missingVariables: missing });
+        return false;
+      }
+      const emptyPath = pathParamNames(request.url).filter((n) => !request.pathVariables?.[n]);
+      if (emptyPath.length && !opts?.force) {
+        setRequestTabs((m) => ({ ...m, [requestId]: "params" }));
+        const message = `Path parameter :${emptyPath[0]} needs a value.`;
+        setResponses((r) => ({ ...r, [requestId]: { kind: "error", message, ...(consoleSoFar.length ? { script: { console: consoleSoFar } } : {}) } }));
+        return false;
+      }
+      return true;
+    };
+    if (!preCode && !check(saved, ws.variableContext(requestId), [])) return;
+
     setBlocker(null);
     aborts.current[requestId]?.abort();
     const controller = new AbortController();
     aborts.current[requestId] = controller;
     setSending((s) => ({ ...s, [requestId]: true }));
-    setResponseTabs((m) => (m[requestId] === "burst" ? { ...m, [requestId]: "body" } : m));
-    sendRequest(loc.request, mergedVariables(ctx), controller.signal)
-      .then((response) => {
+    setResponseTabs((m) => (m[requestId] === "burst" || m[requestId] === "console" ? { ...m, [requestId]: "body" } : m));
+
+    void (async () => {
+      let request = saved;
+      let ctx = ws.variableContext(requestId);
+      const log: ConsoleEntry[] = [];
+      try {
+        if (preCode) {
+          const result = await runScript(scriptInput("pre", preCode, request, ctx));
+          if (controller.signal.aborted) return;
+          log.push(...tagged("pre", result.logs));
+          keep(result.changes);
+          ctx = contextWithChanges(ctx, result.changes);
+          let failure = result.error;
+          if (!failure && result.request) {
+            try {
+              request = applyScriptRequest(request, result.request);
+            } catch (err) {
+              failure = { message: errorMessage(err, "The script changed the request in a way that can't be sent."), line: null };
+              log.push({ phase: "pre", level: "error", message: failure.message });
+            }
+          }
+          if (failure) {
+            setResponses((r) => ({ ...r, [requestId]: { kind: "script-error", message: failure.message, line: failure.line, script: { console: log } } }));
+            return;
+          }
+          if (!check(request, ctx, log)) return;
+        }
+
+        let response = await sendRequest(request, mergedVariables(ctx), controller.signal);
         // Cancelled, replaced by a newer send, or its tab closed while the body was read.
         if (controller.signal.aborted) return;
-        setResponses((r) => ({ ...r, [requestId]: { kind: "ok", response } }));
-        publishResponse(snapshotOf(loc.request, response));
-      })
-      .catch((err) => {
+
+        const script: ScriptRun | undefined = preCode || postCode ? { console: log } : undefined;
+        if (postCode && script) {
+          if (response.rawBodyText.length > MAX_SCRIPT_BODY) {
+            log.push({ phase: "post", level: "warn", message: "The body is over 5 MB, so the post-response script didn't run." });
+          } else {
+            const result = await runScript(
+              scriptInput("post", postCode, request, ctx, {
+                status: response.status,
+                statusText: response.statusText,
+                timeMs: response.timeMs,
+                headers: response.headers,
+                body: response.rawBodyText,
+              }),
+            );
+            if (controller.signal.aborted) return;
+            log.push(...tagged("post", result.logs));
+            keep(result.changes);
+            if (result.error) script.postError = result.error;
+            else if (result.response) {
+              script.originalBody = response.rawBodyText;
+              response = { ...response, rawBodyText: result.response.body, isJson: result.response.json || response.isJson };
+            }
+          }
+        }
+        setResponses((r) => ({ ...r, [requestId]: { kind: "ok", response, ...(script ? { script } : {}) } }));
+        publishResponse(snapshotOf(saved, response));
+      } catch (err) {
         if (controller.signal.aborted) return;
         const message = errorMessage(err, "Request failed");
-        setResponses((r) => ({ ...r, [requestId]: { kind: "error", message } }));
-      })
-      .finally(() => {
-        if (aborts.current[requestId] === controller) {
-          delete aborts.current[requestId];
-          setSending((s) => ({ ...s, [requestId]: false }));
-        }
-      });
+        setResponses((r) => ({ ...r, [requestId]: { kind: "error", message, ...(log.length ? { script: { console: log } } : {}) } }));
+      } finally {
+        done(controller);
+      }
+    })();
   }, []);
 
   const cancel = useCallback((requestId: string) => {
