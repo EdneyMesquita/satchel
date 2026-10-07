@@ -1,6 +1,6 @@
 import type { ResponseEntry } from "@/state/session";
 import { formatSize } from "./format";
-import { ErrorPill, StatusPill } from "./StatusPill";
+import { ErrorPill, NotSentPill, StatusPill } from "./StatusPill";
 
 interface ResponseMetaProps {
   entry: ResponseEntry | undefined;
@@ -16,6 +16,8 @@ export function ResponseMeta({ entry, sending }: ResponseMetaProps) {
         "Sending…"
       ) : entry!.kind === "error" ? (
         <ErrorPill />
+      ) : entry!.kind === "script-error" ? (
+        <NotSentPill />
       ) : (
         <>
           <StatusPill status={entry!.response.status} text={entry!.response.statusText} />

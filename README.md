@@ -16,8 +16,9 @@ Satchel is a standalone tool first: build collections, folders, and requests dir
 - Environments (e.g. "Local" / "Production") plus a Postman-style **Globals** bucket that applies regardless of which environment is active. Precedence: environment → collection → globals. An **Environments & globals** matrix edits every variable in every scope in one table; environments can be created (empty or as a copy), renamed, colored, duplicated and deleted
 - `{{variable}}` substitution in URLs, headers, params, auth and bodies. Hovering a variable shows where its value comes from (and which scopes it shadows); a variable the active environment can't resolve is flagged before sending
 - Query params kept in sync with the URL both ways, and `/:name` **path parameters** with their own values
-- Params / Headers (with the auto-added ones shown) / Body (JSON, **form data** with text and file fields, `x-www-form-urlencoded`) / Auth (Bearer, Basic, API key) / Rate Limit tabs
-- Response body as **Pretty**, **Tree**, **Table** (lists of records as a sortable grid with a row inspector, CSV copy) or **Raw**, with search over keys, values or a path like `data[0].name`, and a button to open it in its own window that follows new responses
+- Params / Headers (with the auto-added ones shown) / Body (JSON, **form data** with text and file fields, `x-www-form-urlencoded`) / Auth (Bearer, Basic, API key) / **Scripts** / Rate Limit tabs
+- **Scripts** in JavaScript before a request is sent and after its response arrives: change headers, query or body, reshape the response, read and set variables. See [Scripts](#scripts)
+- Response body as **Pretty**, **Tree**, **Table** (lists of records as a sortable grid with a row inspector, CSV copy) or **Raw**, with search over keys, values or a path like `data[0].name`, a button to open it in its own window that follows new responses, and **export** as JSON, CSV (lists of records, as the Table shows them) or the raw body
 - **Rate Limit** burst tests: N requests per second for T seconds, charted by latency with `X-RateLimit-Remaining` and the first 429 marked
 - Postman import with a preview: folders, requests, variables, form-data, path variables, collection auth, environment files, and warnings for anything that doesn't carry over (scripts, files on another machine, undefined variables). Drop the export on the window, or pick it from the `+` menu
 - Paste a `curl` command anywhere (or into an open request's URL field to replace it in place) to get a request from it
@@ -42,6 +43,24 @@ environments/<name>.json             one environment per file
 - **Secrets stay local, in your system keychain.** Mark a variable secret (the lock in *Environments & globals*) and its values go to the macOS Keychain, the Windows Credential Manager or the Secret Service (GNOME Keyring, KWallet) on Linux; the shared files keep an empty value, and `.satchel/local.json` only names the keychain entry. Without a keychain, they go to a file in Satchel's data folder that only you can read. The active environment is personal too, so switching environments never shows up in `git status`.
 - **You decide when to sync.** Satchel saves to the folder as you edit, like any editor; it never commits, pulls or pushes on its own. The branch chip in the header opens *Source control*: the changed files by request name, a commit box (only the files you select are committed, even when the workspace is inside a bigger repository), and Pull / Push / Fetch. It runs your system `git`, so your SSH keys and credential manager apply, and it works with any host.
 - **Changes from outside reload.** A `git pull` or branch switch in a terminal reloads the workspace. A file with merge conflict markers is listed under "files need attention" and left untouched until you resolve it.
+
+## Scripts
+
+Each request has a **Pre-request** and a **Post-response** script (the *Scripts* tab). They're saved in the request's file, so they're shared through git with it.
+
+- **Pre-request** runs before the request is sent, with `{{variables}}` still unresolved, so a script can compute a value, store it with `sat.env.set("signature", …)` and use `{{signature}}` in a header of the same request.
+- **Post-response** runs when the response arrives, before it's shown. It can read it and save values (`sat.env.set("token", sat.response.json().token)`), and reshape what's displayed with `sat.response.setJson(…)`; *Show original* brings the body as received back.
+
+| | |
+|---|---|
+| `sat.env` | `get(name)` · `set(name, value)` · `unset(name)` · `name`: the active environment |
+| `sat.globals` | `get(name)` · `set(name, value)` · `unset(name)` |
+| `sat.variables` | `get(name)`: resolved, environment → collection → globals |
+| `sat.request` | `method` · `url` · `headers.get/set/remove` · `query.get/set/remove` · `body` · `json()` · `setJson(obj)` (changeable in the pre-request script) |
+| `sat.response` | `status` · `statusText` · `timeMs` · `headers.get(name)` · `text()` · `json()` · `setJson(obj)` · `setBody(text)` (post-response) |
+| `console` | `log` · `info` · `warn` · `error`: shown in the response's *Console* tab, with the variables the scripts wrote |
+
+Scripts run in a sandbox (QuickJS, in a worker): no network, files, timers or packages, at most 1 s per run and a capped amount of memory. Changes to the request apply to that send only; variable writes are saved like any edit (a secret stays in the keychain). Whatever a script logs, secret values included, appears in the Console. Scripts don't run in Rate Limit bursts.
 
 ## Getting started
 

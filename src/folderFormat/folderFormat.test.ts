@@ -48,6 +48,7 @@ function sample(): Workspace {
                   headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
                   auth: { type: "none" },
                   body: { mode: "raw", language: "json", raw: '{\n  "user": "dev"\n}' },
+                  scripts: { postResponse: 'sat.env.set("token", sat.response.json().token);' },
                 },
               },
             ],
@@ -150,7 +151,7 @@ describe("workspaceToFiles", () => {
     const b = workspaceToFiles(structuredClone(sample()), ROOT);
     expect([...a]).toEqual([...b]);
     const login = a.get("collections/shop-api/auth/login.request.json")!;
-    expect(Object.keys(JSON.parse(login))).toEqual(["id", "name", "method", "url", "params", "headers", "auth", "body"]);
+    expect(Object.keys(JSON.parse(login))).toEqual(["id", "name", "method", "url", "params", "headers", "auth", "body", "scripts"]);
     expect(login.endsWith("}\n")).toBe(true);
     expect(JSON.parse(a.get("collections/shop-api/collection.json")!).order).toEqual([
       "auth",
@@ -184,6 +185,22 @@ describe("filesToWorkspace", () => {
     const fromKeychain = { ...secrets, environments: { "e-local": { token: "rotated" } } };
     const env = filesToWorkspace(legacy, ROOT, fromKeychain).workspace.environments.find((e) => e.id === "e-local")!;
     expect(env.variables.find((v) => v.key === "token")?.value).toBe("rotated");
+  });
+
+  it("keeps scripts in the request file, only when there are any", () => {
+    const files = workspaceToFiles(sample(), ROOT);
+    const login = JSON.parse([...files].find(([p]) => p.endsWith("login.request.json"))![1]);
+    expect(login.scripts).toEqual({ postResponse: 'sat.env.set("token", sat.response.json().token);' });
+    const list = JSON.parse([...files].find(([p]) => p.endsWith("list-products.request.json"))![1]);
+    expect(list).not.toHaveProperty("scripts");
+
+    // malformed or blank scripts are dropped, the request still loads
+    const path = [...files.keys()].find((p) => p.endsWith("login.request.json"))!;
+    files.set(path, JSON.stringify({ ...login, scripts: { preRequest: 42, postResponse: "  " } }));
+    const loaded = filesToWorkspace(files, ROOT);
+    expect(loaded.problems).toEqual([]);
+    const req = loaded.workspace.collections[0].items.flatMap((n) => (n.type === "folder" ? n.children : [n])).find((n) => n.id === "r-login");
+    expect(req?.type === "request" && req.request.scripts).toBeUndefined();
   });
 
   it("converts a legacy single-file workspace", () => {

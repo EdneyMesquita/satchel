@@ -1,10 +1,11 @@
+import type { ReactNode } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 interface SegmentedProps<T extends string> {
   value: T;
   onChange: (value: T) => void;
-  options: { value: T; label: string }[];
+  options: { value: T; label: ReactNode }[];
   className?: string;
   /** "sm": 20px items, for dense toolbars */
   size?: "md" | "sm";

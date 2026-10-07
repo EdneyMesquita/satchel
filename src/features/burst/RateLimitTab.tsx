@@ -105,6 +105,7 @@ export function RateLimitTab({ requestId }: { requestId: string }) {
         Logs status, latency, <span className="font-mono">X-RateLimit-*</span> and <span className="font-mono">Retry-After</span> for
         every request. Results open in the response pane.
       </div>
+      <div className="px-3 pb-3 text-xs leading-normal text-fg3">Scripts don't run during a burst: every request goes out as saved.</div>
     </div>
   );
 }

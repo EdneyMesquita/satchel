@@ -16,6 +16,9 @@ import { useViewMode, type ViewMode } from "./useViewMode";
 import { findRecordLists } from "./table/tableModel";
 import { TableView, useTableState } from "./table/TableView";
 import { VirtualCode } from "./VirtualCode";
+import { CsvExportDialog } from "./export/CsvExportDialog";
+import { ExportMenu } from "./export/ExportMenu";
+import { exportFileName } from "./export/exportModel";
 
 export interface ResponseViewerProps {
   /** body exactly as received; JSON is indented here for the Pretty view */
@@ -24,6 +27,12 @@ export interface ResponseViewerProps {
   variant: "pane" | "window";
   /** pane only: shows the "open in new window" button */
   onOpenWindow?: () => void;
+  /** the request's name: exports are saved as `<its slug>-YYYY-MM-DD.<ext>` (default "response") */
+  fileName?: string;
+  /** the response's content-type header: picks the raw export's extension */
+  contentType?: string;
+  /** the post-response script changed this body (export says so) */
+  transformed?: boolean;
 }
 
 const MODES: { value: ViewMode; label: string }[] = [
@@ -40,7 +49,7 @@ const DEBOUNCE_ABOVE = 200_000;
 const VIRTUALIZE_ABOVE = 100_000;
 
 /** Response body with Pretty / Tree / Raw views, search, and copy. Used by the response pane and the pop-out window. */
-export function ResponseViewer({ rawText, isJson, variant, onOpenWindow }: ResponseViewerProps) {
+export function ResponseViewer({ rawText, isJson, variant, onOpenWindow, fileName, contentType, transformed }: ResponseViewerProps) {
   const isWindow = variant === "window";
   const parsed = useMemo(() => (isJson ? parseJsonCached(rawText) : NOT_JSON), [rawText, isJson]);
   const [stored, setMode] = useViewMode();
@@ -65,6 +74,15 @@ export function ResponseViewer({ rawText, isJson, variant, onOpenWindow }: Respo
   const [focusTick, setFocusTick] = useState(0);
 
   const table = useTableState(lists, mode === "table" ? query : "", effScope);
+
+  // Export: the CSV dialog opens from the menu and belongs to this body (closed when a new one arrives,
+  // adjusting state during render like useTableState).
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [csvBody, setCsvBody] = useState(rawText);
+  if (csvBody !== rawText) {
+    setCsvBody(rawText);
+    setCsvOpen(false);
+  }
 
   const treeSearch = useMemo(
     () => (mode === "tree" && parsed.ok && query ? searchTree(parsed.value, query, effScope) : null),
@@ -174,7 +192,12 @@ export function ResponseViewer({ rawText, isJson, variant, onOpenWindow }: Respo
               : "grid-rows-[auto_minmax(0,1fr)]",
         )}
       >
-        <div role="toolbar" aria-label="Response body view" className={cn("flex min-w-0 items-center gap-1 border-b border-line", isWindow ? "h-10 gap-2 px-3" : "h-8 px-2")}>
+        <div
+          role="toolbar"
+          aria-label="Response body view"
+          // A narrow pane wraps the actions under the view switch rather than squeezing either.
+          className={cn("flex min-w-0 items-center gap-1 border-b border-line", isWindow ? "h-10 gap-2 px-3" : "min-h-8 flex-wrap px-2 py-0.5")}
+        >
           <Segmented
             size="sm"
             value={mode}
@@ -183,35 +206,38 @@ export function ResponseViewer({ rawText, isJson, variant, onOpenWindow }: Respo
             aria-label="View as"
             className="flex-none"
           />
-          {isWindow ? searchBar : <span className="flex-1" />}
-          {!isWindow && (
-            <ToolbarButton label="Search" hint={`${MOD}F`} pressed={searchOpen} onClick={() => (searchOpen ? closeSearch() : openSearch())}>
-              <Search />
-            </ToolbarButton>
-          )}
-          {mode === "tree" && (
-            <>
-              <ToolbarButton label="Expand all" onClick={() => treeRef.current?.expandAll()}>
-                <ChevronsUpDown />
+          {isWindow && searchBar}
+          <div className={cn("ml-auto flex items-center", isWindow ? "flex-none gap-2" : "min-w-0 flex-wrap justify-end gap-1")}>
+            {!isWindow && (
+              <ToolbarButton label="Search" hint={`${MOD}F`} pressed={searchOpen} onClick={() => (searchOpen ? closeSearch() : openSearch())}>
+                <Search />
               </ToolbarButton>
-              <ToolbarButton label="Collapse all" onClick={() => treeRef.current?.collapseAll()}>
-                <ChevronsDownUp />
+            )}
+            {mode === "tree" && (
+              <>
+                <ToolbarButton label="Expand all" onClick={() => treeRef.current?.expandAll()}>
+                  <ChevronsUpDown />
+                </ToolbarButton>
+                <ToolbarButton label="Collapse all" onClick={() => treeRef.current?.collapseAll()}>
+                  <ChevronsDownUp />
+                </ToolbarButton>
+              </>
+            )}
+            {mode === "table" && (
+              <ToolbarButton label="Copy table as CSV" onClick={() => void copyWithToast(table.csv(), "Table copied as CSV.")}>
+                <FileSpreadsheet />
               </ToolbarButton>
-            </>
-          )}
-          {mode === "table" && (
-            <ToolbarButton label="Copy table as CSV" onClick={() => void copyWithToast(table.csv(), "Table copied as CSV.")}>
-              <FileSpreadsheet />
+            )}
+            <ToolbarButton label="Copy body" onClick={() => void copyWithToast(mode === "raw" || !isJson ? rawText : prettyJsonCached(rawText), "Body copied.")}>
+              <Copy />
             </ToolbarButton>
-          )}
-          <ToolbarButton label="Copy body" onClick={() => void copyWithToast(mode === "raw" || !isJson ? rawText : prettyJsonCached(rawText), "Body copied.")}>
-            <Copy />
-          </ToolbarButton>
-          {onOpenWindow && (
-            <ToolbarButton label="Open in new window" onClick={onOpenWindow}>
-              <ExternalLink />
-            </ToolbarButton>
-          )}
+            <ExportMenu rawText={rawText} json={parsed.ok} lists={lists} fileName={fileName} contentType={contentType} transformed={transformed} onCsv={() => setCsvOpen(true)} />
+            {onOpenWindow && (
+              <ToolbarButton label="Open in new window" onClick={onOpenWindow}>
+                <ExternalLink />
+              </ToolbarButton>
+            )}
+          </div>
         </div>
 
         {!isWindow && searchOpen && <div className="flex h-[34px] animate-fade-in items-center border-b border-line px-2">{searchBar}</div>}
@@ -245,6 +271,14 @@ export function ResponseViewer({ rawText, isJson, variant, onOpenWindow }: Respo
 
         {isWindow && mode === "tree" && <PathFooter path={selectedPath} />}
       </div>
+      {csvOpen && lists.length > 0 && (
+        <CsvExportDialog
+          lists={lists}
+          initialList={mode === "table" ? table.listIndex : 0}
+          defaultName={exportFileName(fileName, "csv")}
+          onClose={() => setCsvOpen(false)}
+        />
+      )}
     </TooltipProvider>
   );
 }

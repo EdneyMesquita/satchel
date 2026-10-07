@@ -9,6 +9,8 @@ import { ParamsTab } from "./ParamsTab";
 import { HeadersTab } from "./HeadersTab";
 import { AuthTab } from "./AuthTab";
 import { BodyTab } from "./body/BodyTab";
+import { ScriptsTab } from "./ScriptsTab";
+import { scriptCount } from "./scriptSnippets";
 
 interface RequestPaneProps {
   request: SatchelRequest;
@@ -27,7 +29,7 @@ function bodyTag(body: SatchelRequest["body"]): string | undefined {
   return undefined;
 }
 
-/** Left pane of the request view: Params / Headers / Body / Auth / Rate Limit. */
+/** Left pane of the request view: Params / Headers / Body / Auth / Scripts / Rate Limit. */
 export function RequestPane({ request, context, update }: RequestPaneProps) {
   const session = useSessionCore();
   const tab = session.requestTab(request.id, request);
@@ -39,6 +41,7 @@ export function RequestPane({ request, context, update }: RequestPaneProps) {
     { id: "headers", label: "Headers", tag: headerCount || undefined },
     { id: "body", label: "Body", tag: bodyTag(request.body) },
     { id: "auth", label: "Auth", tag: request.auth.type !== "none" ? AUTH_TAG[request.auth.type] : undefined },
+    { id: "scripts", label: "Scripts", tag: scriptCount(request) || undefined },
     { id: "rate", label: "Rate Limit" },
   ];
 
@@ -47,6 +50,7 @@ export function RequestPane({ request, context, update }: RequestPaneProps) {
   else if (tab === "headers") content = <HeadersTab request={request} context={context} update={update} />;
   else if (tab === "body") content = <BodyTab request={request} context={context} update={update} />;
   else if (tab === "auth") content = <AuthTab request={request} context={context} update={update} />;
+  else if (tab === "scripts") content = <ScriptsTab request={request} update={update} />;
   else content = <RateLimitTab requestId={request.id} />;
 
   return (

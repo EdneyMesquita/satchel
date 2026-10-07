@@ -27,3 +27,8 @@ export function StatusPill({ status, text }: { status: number; text: string }) {
 export function ErrorPill() {
   return <Pill tone="error">Error</Pill>;
 }
+
+/** Shown when the pre-request script stopped the send. */
+export function NotSentPill() {
+  return <Pill tone="error">Not sent</Pill>;
+}
