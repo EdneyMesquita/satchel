@@ -87,8 +87,8 @@ export function CsvExportDialog({ lists, initialList, defaultName, onClose }: Cs
       <ModalFooter
         hint={
           nested.length
-            ? `Nested values (${nested.slice(0, 3).join(", ")}${nested.length > 3 ? ", …" : ""}) stay as JSON in their cell.`
-            : "The same columns as the Table view."
+            ? `A column per field, in the records' order. Nested values (${nested.slice(0, 3).join(", ")}${nested.length > 3 ? ", …" : ""}) stay as JSON in their cell.`
+            : "A column per field, in the records' order."
         }
       >
         <SecondaryButton onClick={() => void copyWithToast(csvForList(list, columns), "CSV copied.")}>Copy</SecondaryButton>
