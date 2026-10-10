@@ -70,6 +70,14 @@ function body(b: RequestBody, root: string | null, filesOut: Record<string, stri
   }
 }
 
+/** The request's non-empty scripts, or undefined (so requests without any don't gain a key). */
+function scriptsOf(r: SatchelRequest): Record<string, string> | undefined {
+  const out: Record<string, string> = {};
+  if (r.scripts?.preRequest?.trim()) out.preRequest = r.scripts.preRequest;
+  if (r.scripts?.postResponse?.trim()) out.postResponse = r.scripts.postResponse;
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function requestFile(r: SatchelRequest, root: string | null, local: LocalState): string {
   const files: Record<string, string> = {};
   const out: Record<string, unknown> = { id: r.id, name: r.name, method: r.method, url: r.url, params: r.params.map(pair) };
@@ -77,6 +85,8 @@ export function requestFile(r: SatchelRequest, root: string | null, local: Local
   out.headers = r.headers.map(pair);
   out.auth = auth(r.auth);
   out.body = body(r.body, root, files);
+  const scripts = scriptsOf(r);
+  if (scripts) out.scripts = scripts;
   if (Object.keys(files).length) local.files[r.id] = files;
   return toJson(out);
 }

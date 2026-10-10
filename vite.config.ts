@@ -11,6 +11,11 @@ export default defineConfig(() => ({
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "./src") },
   },
+  // The script engine is only imported by a worker, which Vite finds late; listing it here
+  // spares the page a reload the first time a script runs in `npm run dev`.
+  optimizeDeps: {
+    include: ["quickjs-emscripten-core", "@jitl/quickjs-wasmfile-release-sync"],
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

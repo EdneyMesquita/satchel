@@ -7,6 +7,8 @@ export interface ResponseTabItem {
   label: string;
   /** small fg3 count after the label (header count, "n/total") */
   count?: string;
+  /** the count is about errors */
+  alert?: boolean;
 }
 
 interface ResponseTabsProps {
@@ -36,7 +38,7 @@ export function ResponseTabs({ tabs, active, onSelect, meta }: ResponseTabsProps
             )}
           >
             {t.label}
-            {t.count !== undefined && <span className="text-[11px] text-fg3">{t.count}</span>}
+            {t.count !== undefined && <span className={cn("text-[11px] text-fg3", t.alert && "text-err")}>{t.count}</span>}
           </button>
         );
       })}

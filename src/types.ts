@@ -56,6 +56,13 @@ export interface SatchelRequest {
   headers: KeyValue[];
   auth: AuthConfig;
   body: RequestBody;
+  // JavaScript run before the request is sent and after its response arrives (see src/scripts/).
+  scripts?: RequestScripts;
+}
+
+export interface RequestScripts {
+  preRequest?: string;
+  postResponse?: string;
 }
 
 export interface FolderNode {

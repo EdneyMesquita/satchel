@@ -142,7 +142,17 @@ function parseRequest(json: unknown, id: string, root: string | null, local: Loc
     headers: keyValues(json.headers, "headers"),
     auth: parseAuth(json.auth),
     body: parseBody(json.body, root, local.files[id] ?? {}),
+    ...parseScripts(json.scripts),
   });
+}
+
+/** Scripts are optional and only strings count; anything else is ignored rather than failing the request. */
+function parseScripts(value: unknown): Pick<SatchelRequest, "scripts"> {
+  if (!isRecord(value)) return {};
+  const scripts: NonNullable<SatchelRequest["scripts"]> = {};
+  if (typeof value.preRequest === "string" && value.preRequest.trim()) scripts.preRequest = value.preRequest;
+  if (typeof value.postResponse === "string" && value.postResponse.trim()) scripts.postResponse = value.postResponse;
+  return Object.keys(scripts).length ? { scripts } : {};
 }
 
 /** Secret values from local.json merged back into a variable list. */
