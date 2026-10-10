@@ -6,6 +6,7 @@ import { Checkmark } from "@/components/common/Checkmark";
 import { ThemeProvider } from "@/state/theme";
 import type { ResponseTab } from "@/state/session";
 import { ResponseViewer } from "../viewer/ResponseViewer";
+import { contentTypeOf } from "../viewer/export/exportModel";
 import { ResponseTabs } from "../ResponseTabs";
 import { StatusPill } from "../StatusPill";
 import { HeadersTable } from "../HeadersTable";
@@ -147,6 +148,8 @@ function ResponseWindow({ id }: { id: string }) {
             variant="window"
             rawText={snapshot.rawBodyText}
             isJson={snapshot.isJson}
+            fileName={snapshot.name}
+            contentType={contentTypeOf(snapshot.headers)}
           />
         )}
       </div>

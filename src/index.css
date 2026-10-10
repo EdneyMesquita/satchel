@@ -248,6 +248,11 @@
   .json-literal { color: var(--j-b); }
   .json-punct { color: var(--j-p); }
 
+  /* JavaScript colors (script editor); strings and numbers reuse .json-string / .json-number */
+  .js-kw { color: var(--j-b); }
+  .js-c { color: var(--fg3); font-style: italic; }
+  .js-sat { color: var(--brass); }
+
   .scrollbar-none {
     scrollbar-width: none;
   }
